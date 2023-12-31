@@ -1,0 +1,23 @@
+<launch>
+    <arg name="project" default="lio_sam"/>
+
+    <!-- ??? -->
+    <env name="ROSCONSOLE_CONFIG_FILE" value="$(find lio_sam)/launch/include/rosconsole_error.conf"/>
+
+    <!--EKF GPS-->
+    <node pkg="robot_localization" type="ekf_localization_node" name="ekf_gps" respawn="true">
+        <remap from="imu_correct" to="imu/data" />
+        <remap from="odometry/filtered" to="odometry/natsat" /> <!-- ??? -->
+    </node>
+
+    <!--Navsat-->
+    <node pkg="robot_localization" type="navsat_transform_node" name="navsat" respawn="true">
+        <!-- <rosparam param="datum">[42.35893211, -71.09345588, 0.0, world, base_link]</rosparam> -->
+        <!-- by remap, topic "imu/data" and topic "imu_correct"  contain same info-->
+        <!-- <remap from="imu/data" to="kitti/oxts/imu" /> -->
+        <!-- from topic in code, to topic in bag -->
+        <remap from="gps/fix" to="kitti/oxts/gps/fix" />
+        <remap from="odometry/filtered" to="odometry/navsat" />
+    </node>
+
+</launch>

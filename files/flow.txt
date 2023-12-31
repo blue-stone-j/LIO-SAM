@@ -1,0 +1,582 @@
+
+imageProjection 
+{
+  //定义并注册了两种点云：VelodynePointXYZIRT，OusterPointXYZIRT
+  ImageProjection构造函数 
+  {
+    订阅imuhandler和odometry放入对应的队列
+    点云回调函数 
+    {
+      判断点云有效性 
+      { (无效则退出回调函数)
+        缓存点云到队列
+        点云的数量过少则返回false
+        将队列首个点云从ros消息转换为Velodyne格式的点云
+        获取点云的起始和结束时间
+        check dense flag: "is_dense = true" means points is in order
+        check ring channel: whether include information that every point in which scan(horizontal)
+        check point time(relative): deskewFlag = 1说明已经完成畸变补偿
+      }
+      判断去畸变信息deskewInfo { (无效则退出回调函数)
+        IMU数据在时间上覆盖该帧点云则继续
+        imuDeskewInfo 
+        { //返回是否能去畸变
+          删除旧的imu数据
+          imu数据为空则返回
+          遍历imu数据 
+          {
+            convert imu pose to Euler as pose at cloud start moment
+            若imu时间超过帧的结束时刻则跳出循环
+            get angular velocity of this imu frame
+            integrate rotation并存储各个imuframe的角度
+          }
+          返回是否可用imu去畸变
+        }
+        odomDeskewInfo 
+        {
+          删除旧odom数据
+          Odom数据为空则返回
+          odom首个时间戳晚于帧的时间则返回
+          获取startOdomMsg: first odom data later than cloud start moment
+          convert startOdomMsg from ros msg to tf quaternion(orientation)
+          convert orientation to Euler
+          save odom pose in cloud start moment as Initial guess used in mapOptimization
+          odom数据在时间上覆盖该帧点云则继续
+          该帧结束时刻前最晚的odom数据放入endOdomMsg
+          如果odom退化则返回
+          用startOdomMsg和endOdomMsg计算transBegin、transEnd、transBt
+          用transBt计算odom在该帧点云期间的增量
+          返回是否可用odom去畸变
+        }
+      }
+      投影点云到距离地图 
+      {
+        遍历点云中的点 
+        {
+          判断距离有效性
+          计算行标
+          采样
+          计算水平角、列号,判断列号的有效性
+          跳过重叠部分的点
+          畸变补偿 
+          {
+            如果不能补偿畸变则返回原来的点
+            计算点的绝对时间
+            找到相对旋转 
+            {
+              find first imu data later than this point
+              根据时间用imu线性插值计算相对旋转
+            }
+            找到相对位置 
+            {
+              如果移动很慢则为0,否则根据时间用imu线性插值计算相对位置
+            }
+            用第一个点的位姿计算transStartInverse
+            计算当前点的位姿transFinal和当前点到点云初始点的相对位姿transBt
+            deskew point to start moment
+          }
+          save range into range matrix
+          计算和保存点的索引和坐标
+        }
+      }
+      cloudExtraction { (discard first&last 5 point of every ring)???
+        把有效点的列号和距离存入点云信息
+        把点存入 extractedCloud
+      }
+      publishClouds 
+      {
+        publishCloud 
+        {
+          pcl:pc转换为ros:pc2;
+          发布点云
+        }
+        发布cloudInfo(ros:pc2)
+      }
+      resetParameters重置和初始化参数
+    }
+    为变量分配空间
+    重置和初始化参数
+    设置控制台输出的信息
+  }
+}
+
+特征提取 {
+  FeatureExtraction构造函数 
+  {
+    laserCloudInfoHandler 
+    {
+      计算曲率
+      排除无效点 
+      {
+        遍历每个点 
+        {
+          排除遮挡点:列号相差小,深度相差大(两个方向)
+          排除平行于激光束的点:相邻点深度差与该点深度相比偏大
+        }
+      }
+      提取特征 
+      {
+        遍历每行 
+        {
+          遍历6个seg 
+          {
+            计算起始点和终止点索引
+            按照粗糙度排序
+            在始终点范围内 
+            {
+              角点 
+              {
+                选取角点
+                排除该点附近的点(不再从这些点提取特征点)
+              }
+              面点 
+              {
+                选取面点
+                排除该点附近的点(不再从这些点提取特征点)
+              }
+            }
+            保存面点
+          }
+          下采样每行的面点并保存
+        }
+      }
+      发布特征点云 
+      {
+        清空cloudInfo
+        发布角点,发布面点
+        发布cloudInfo(包含角点和面点)
+      }
+    }
+    initializationValue
+  }
+}
+
+imupreintegration 
+{
+  IMUPreintegration构造函数 
+  {
+    imuHandler 
+    {
+      //在这一部分lidarpose来自于imu
+      变换IMU data to front-left-up frame 
+      {
+        加速度,角速度,方向
+        如果使用6轴IMU则报错
+      }
+      使用gtsam积分该帧imu数据
+      结合上一个odom的状态和偏差预测当前状态
+      使用gtsam transform pose from imu to ldiar frame
+      位姿和相对于子tf的位姿: transform from gtsam format to ros odometry msg format
+      发布imu增量里程计
+    }
+    odometryHandler { (incremental odometry sent by map optimization node)
+      //在这一部分lidarpose来自于odom消息
+      用于优化的imu队列不为空
+      get odometry pose
+      判断odom是否退化
+      0如果没有初始化系统 
+      {
+        重置优化:initialize gtsam
+        移除早于odom的imu数据
+        添加因子至因子图 
+        {
+          添加PriorFactor(priorPose:lidar坐标转换为imu坐标)(待优化位姿,来自odom的位姿约束,odom噪声)
+          velocity to be estimated, initial velocity(large), confidence/weight
+          bias to be estimated, initial bias(0), confidence/weight
+        }
+        // now we have added all constraint factors for initialization
+        变量节点赋初值(状态变量,来自odom的初始值),并插入graphValues
+        // now we have added all state factors for initialization
+        optimizer.update(因子, 状态变量);
+        initialize preintegration with initial bias
+      }
+      重置因子图以加速 
+      {
+        get updated noise/confidence before reset
+        reset graph
+        添加最新的位姿,速度,偏差,值
+        optimize once
+      }
+      1积分imu并优化 
+      {
+        积分相邻两次优化之间的IMU数据:积分至imu时刻大于最近一次优化完成的时刻
+        添加因子至因子图 
+        {
+          添加imu因子/ImuFactor(用预积分约束相邻状态)
+          添加imu偏差因子/BetweenFactor(用常量约束)
+          添加位姿因子/PriorFactor()
+          添加PriorFactor(pose factor:lidar坐标转换为imu坐标)(待优化位姿,来自odom的位姿约束,odom噪声)
+        }
+        变量节点赋初值(状态变量,来自预积分预测的初始值),并插入graphValues
+        optimizer.update(因子, 状态变量);
+        清空因子和graphValues
+        把优化结果作为prev状态(预积分的初始状态)(位姿速度偏差)
+        用偏差重置预积分器
+        检查优化结果 
+        {
+          速度和偏差过大则报错
+        }
+      }
+      3重新传播imu预积分 
+      {
+        删除比odom更早的imu数据
+        若imu不为空 
+        {
+          用优化后的偏差设置imu预积分偏差
+          从odom的时刻开始积分所有imu数据
+        }
+      }
+      因子图大小自增
+      首次优化置为true
+    }
+    定义预积分参数 
+    {
+      为预积分设置重力方向、加速度噪声、陀螺仪噪声
+      设置积分误差
+    }
+    设置先验imu偏差为0
+    设置初始位姿
+    设置位姿、速度、偏差的先验噪声
+    correctionNoise(分为是否退化两种噪声)
+    noiseModelBetweenBias
+    用预积分参数和先验噪声设置两个预积分(用于优化和imu线程积分)
+  }
+  TransformFusion构造函数 
+  {
+    若lidarFrame和baselinkFrame不一致 
+    {
+      捕获错误
+    }
+    lidarOdometryHandler { (global pose generated in map optimization node)
+      把lidarodom消息转换为lidarOdomAffine
+    }
+    imuOdometryHandler 
+    {
+      把imuodom消息放入imuodom队列
+      删除早于lidarOdomTime的imu数据
+      imuOdomAffineLast = lidarOdomAffine * imuOdomAffineIncre
+      把最新的imu放入odom并发布
+      更新并发布最新的tf:odom_2_baselink
+      控制发布频率 
+      {
+        把最新的imu加入imupath
+        删除过早于lidarOdomTime的imupath数据
+        发布imupath
+      }
+    }
+  }
+}
+
+mapoptimization 
+{
+  mapOptimization构造函数 
+  {
+    laserCloudInfoHandler 
+    {
+      解析出时间和两种特征点
+      控制优化频率 
+      {
+        更新初始估计值 
+        {
+          如果没有关键帧 
+          {
+            用磁力计的角度初始化transformTobeMapped和lastImuTransformation
+            完成更新初始估计值
+          }
+          如果使用imu预积分里程计 
+          {
+            当前预积分位姿=点云信息的初始估计
+            如果没有收到imu预积分里程计 
+            {
+              上一帧预积分位姿=当前预积分位姿
+            } 否则 
+            {
+              位姿增量=当前-上一帧预积分位姿
+              初始值=上一次优化结果+增量
+              上一帧预积分位姿=当前预积分位姿
+            }
+            如果imu可用 {
+              位姿增量=当前-上一帧预积分位姿
+              初始值=上一次优化结果+增量
+              上一帧预积分位姿=当前预积分位姿
+            }
+          }
+        }
+        提取周围关键帧 
+        {
+          若没有关键帧则返回
+          用关键帧设置kd树
+          搜索半径内关键帧并保存
+          下采样周围关键帧
+          为每帧搜索最近帧
+          提取时间上最近的关键帧
+          构建局部地图 
+          {
+            遍历周围关键帧 
+            {
+              排除距离远的帧
+              若地图中存在该帧 
+              {
+                提取该地图帧放入局部地图
+              } 否则 
+              {
+                转换进地图坐标系并提取进局部地图
+                放入地图
+              }
+            }
+            下采样局部地图
+            地图容器太大则清空
+          }
+        }
+        下采样当前scan
+        scan-map 
+        {
+          若没有关键帧则返回
+          若特征点数量足够多 
+          { (否则报错)
+            用局部地图设置kd树
+            多次迭代 
+            {
+              角点优化 
+              {
+                transformTobeMapped从欧拉角转换为eigen
+                遍历角点 
+                {
+                  计算地图坐标系下的位姿
+                  找到5个最近点
+                  最近点距离有效 
+                  {
+                    计算5个点的协方差及其特征向量和特征值
+                    计算残差(大小为点到线的距离,梯度方向为点到直线的方向)
+                    构造核函数
+                    若约束有效 
+                    { (核函数足够大)
+                      保存点(地图坐标系)、残差(大小和方向)、约束有效性
+                    }
+                  }
+                }
+              }
+              面点优化 
+              {
+                transformTobeMapped从欧拉角转换为eigen
+                遍历面点 
+                {
+                  找到5个最近点
+                  最近点距离有效 
+                  {
+                    点的坐标作为矩阵A;矩阵B为-1列矩阵
+                    计算平面单位法向量:Ax=B(使用5点坐标和平面方程、eigen qr分解求解)
+                    点到平面的距离足够小则为有效平面
+                    若平面有效 
+                    {
+                      残差为点到平面的距离
+                      计算核函数
+                      若约束有效 
+                      { (核函数足够大)
+                        保存点(地图坐标系)、残差(大小和方向)、约束有效性
+                      }
+                    }
+                  }
+                }
+              }
+              整合面和点的残差
+              LM优化 
+              { (GN)
+                用雷达坐标系下的坐标计算相机坐标系下 sin cos of rotation around xyz-axis
+                若约束太少则返回
+                旋转和平移的雅可比放入矩阵A,残差的大小放入矩阵B
+                遍历每个点 
+                {
+                  把点转换到相机坐标系
+                  计算旋转的雅可比
+                  雅可比转换回雷达坐标系得到矩阵A和矩阵B
+                }
+                GN优化求解增量
+                首次迭代 
+                {
+                  AtA的特征值太小说明矩阵发生退化,将相应特征向量置为0
+                  matP = matV.inv() * matV2
+                }
+                如果退化 
+                {
+                  matX = matP * matX2
+                }
+                状态更新(退化的状态分量不更新)
+                若旋转和平移的增量小说明已收敛,结束优化;否则继续优化
+              }
+            }
+          }
+          加权融合imu和优化后的状态 
+          {
+            若imu可用 
+            {
+              球面线性插值roll和pitch
+            }
+            限制优化后的状态的极值
+          }
+        }
+        保存关键帧,添加因子,优化 
+        {
+          是否保存关键帧 
+          {
+            关键帧为空则保存
+            上一关键帧为最新的6D关键帧,当前帧为优化后的位姿
+            两帧差值大于阈值则保存
+          }
+          addOdomFactor 
+          {
+            若关键帧为空 
+            {
+              添加先验因子PriorFactor: (0,已优化位姿转换为gtsam:pose,先验噪声)
+              插入初值(0,已优化位姿转换为gtsam:pose)
+            } 否则 
+            {
+              between约束=已优化位姿-上一关键帧位姿
+              添加BetweenFactor(因子序号1,因子序号2,between约束,odom噪声)
+              插入初值(当前帧位姿,已优化位姿)
+            }
+          }
+          addGPSFactor 
+          {
+            gps为空则返回
+            关键帧为空则返回
+            第一帧和最新帧很近则触发回环,不适用gps,返回
+            位姿协方差很小,返回
+            循环至gps为空 
+            {
+              删除旧的gps数据
+              若数据远晚于当前laser帧时间,跳出循环
+              gps噪声过大,进入下一轮循环
+              选择是否使用gps的高程数据
+              gps的xy太小,进入下一轮循环
+              相邻gps间隔小于5m,进入下一轮循环
+              添加GPSFactor(因子序号,gtsam::Point3,gps_noise)
+            }
+          }
+          addLoopFactor 
+          {
+            回环队列为空则返回
+            遍历所有回环 
+            {
+              回环噪声为ICP score
+              添加BetweenFactor(因子序号1,因子序号2,between约束,回环噪声)
+            }
+            清空回环相关队列
+          }
+          isam->update
+          若添加了BetweenFactor,则额外增加几次更新
+          清空因子图和相应的初值
+          将优化后的位姿插入3d和6d关键帧
+          获取位姿协方差
+          优化后的位姿放入transformTobeMapped
+          保存关键帧角点和面点
+          把位姿插入globalPath
+        }
+      }
+      纠正位姿 
+      {
+        关键帧为空则返回
+        当存在BetweenFactor时 
+        {
+          清空地图容器和globalPath
+          读取isamCurrentEstimate更新所有关键帧
+          把位姿插入globalPath
+        }
+      }
+      发布雷达里程计 
+      {
+        用优化后的位姿发布LaserOdometryGlobal
+        发布tf:odom_to_lidar
+        发布增量里程计 
+        {
+          增量=增量里程计优化后的值(current optimized pose)-优化前的值(last optimized pose)
+          增量里程计+=增量
+        }
+        若imu可用且pitch在合理范围 
+        {
+          球面线性插值roll和pitch
+        }
+        标记增量里程计是否退化
+        发布增量里程计
+      }
+      发布帧 
+      {
+        关键帧为空则返回
+        发布关键位姿
+        发布周围关键帧
+        把下采样后的角点和面点转换到世界坐标系下发布
+        发布畸变补偿后的原始点云
+        发布globalPath
+      }
+    }
+    gpsHandler 
+    {
+      把gps放入队列
+    }
+    loopInfoHandler 
+    {
+      若回环有效则插入回环队列
+      删除旧的回环
+    }
+    订阅保存地图服务 {???}
+    设置角点面点ICP周围关键帧下采样参数
+    allocateMemory 
+    {
+      分配空间
+      matP和transformTobeMapped设为0
+    }
+  }
+  回环线程 
+  {
+    判断是否开启回环
+    设置回环频率
+    循环 
+    {
+      performLoopClosure 
+      {
+        关键帧为空则返回
+        检测外部回环 
+        {
+          无回环,返回
+          时间太近,返回
+          关键帧太少,返回
+          loopcur:找到最接近回环时间的关键帧
+          looppre:找到最接近回环时间的关键帧
+          cur=pre,返回
+          curkey已经在回环容器中,返回
+          返回true
+        }
+        距离回环 
+        {
+          curkey已经在回环容器中,返回
+          距离接近的筛选为回环帧
+          筛选时间差异足够大的帧
+          未找到回环,返回
+          返回true
+        }
+        找到cureKey
+        找到prevkey的相邻 
+        {
+          把周围关键帧的角点和面点转换至世界坐标系下放入nearKeyframes
+          若不为空则下采样
+        }
+        构成回环的点云的点太少则返回
+        设置scan-map的ICP参数并执行匹配
+        不收敛或残差太大则返回
+        用ICP得到的位姿调整curkey并发布
+        把匹配结果加入回环队列(序号,相对位姿,噪声)
+        把回环加入回环容器
+      }
+      visualizeLoopClosure {        回环容器为空则返回???      }
+    }
+  }
+  visualizeGlobalMapThread 
+  {
+    按频率循环 
+    {
+      把当前关键帧附近的关键帧的位姿放入globalMapKeyPoses下采样
+      排除距离较远的附近关键帧
+      把剩余的附近关键帧的角点和面点放入globalMapKeyFrames下采样后发布
+    }
+  }
+}

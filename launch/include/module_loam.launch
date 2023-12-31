@@ -1,0 +1,11 @@
+<launch>
+
+   <arg name="project" default="lio_sam"/> <!-- as a macro to reconstruct launchfile, local varible in this launchfile-->
+   <!-- node package_name execute_file_name node_name output_log respawn="true"-->
+   <!-- node_name will cover original name in source -->
+   <!-- respawn: default="false"; "true":respawn this node when this node crushed -->
+   <node pkg="$(arg project)" type="$(arg project)_imuPreintegration"   name="$(arg project)_imuPreintegration"    output="screen"     respawn="true"/>
+   <node pkg="$(arg project)" type="$(arg project)_imageProjection"     name="$(arg project)_imageProjection"      output="screen"     respawn="true"/>
+   <node pkg="$(arg project)" type="$(arg project)_featureExtraction"   name="$(arg project)_featureExtraction"    output="screen"     respawn="true"/>
+   <node pkg="$(arg project)" type="$(arg project)_mapOptimization"      name="$(arg project)_mapOptmization"       output="screen"     respawn="true"/>
+</launch>
