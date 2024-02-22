@@ -3,8 +3,6 @@
 
 * 论文名称：LIO SAM - Tightly coupled Lidar Inertial Odometry via Smoothing and Mapping
 
-* 可用的论文下载位置：https://github.com/blue-stone-w/example/tree/main/reference
-
 * 本文件所在目录为包，不是ros的工作空间
 
 ### helpful links
