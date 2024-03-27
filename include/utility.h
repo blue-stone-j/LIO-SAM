@@ -1,6 +1,6 @@
 /*
 Description: 读取参数，提供一些工具方法
-Author     : Wang Junpeng
+Author     : Ji Qingshi
 date       :
 */
 

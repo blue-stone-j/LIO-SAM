@@ -1,6 +1,6 @@
 /*
 Description: 点云计算曲率，提取特征（角点、平面点）
-Author     : Wang Junpeng
+Author     : Ji Qingshi
 date       :
 */
 
