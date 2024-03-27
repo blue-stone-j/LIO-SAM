@@ -4,7 +4,7 @@ scan-map match and optimize; loop; gps fusion; factors graph optimization
 rotation is described by Euler, not quaternion or rotation vector or rotation matrix
 
 
-Author     : Wang Junpeng
+Author     : Ji Qingshi
 date       :
 */
 
