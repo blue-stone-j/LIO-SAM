@@ -247,7 +247,8 @@ imupreintegration
     {
       捕获错误
     }
-    lidarOdometryHandler { (global pose generated in map optimization node)
+    lidarOdometryHandler 
+    { (global pose generated in map optimization node)
       把lidarodom消息转换为lidarOdomAffine
     }
     imuOdometryHandler 

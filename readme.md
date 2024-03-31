@@ -19,4 +19,16 @@
 base_link上下跳跃，可能是IMU外参标定错误。 
 
 ##### 
-系统的性能在很大程度上取决于IMU测量的质量。IMU数据速率越高，系统精度越好。建议使用至少提供200Hz输出频率的IMU。
+系统的性能在很大程度上取决于IMU测量的质量。IMU数据速率越高，系统精度越好。建议使用至少提供200Hz输出频率的IMU。受限于gtsam的计算精度，imu频率不能过高，最好维持在500Hz以下。
+
+
+### discription of files
+##### imageProjection
+receive cloud, deskew and project cloud to pseudo-image.
+
+##### featureExtraction
+extract features.
+
+##### imuPreintegration
+
+##### mapOptimization

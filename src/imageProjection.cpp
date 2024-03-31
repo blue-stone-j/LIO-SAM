@@ -48,7 +48,7 @@ const int queueLength = 2000; // max num of saves imu data
  */
 class ImageProjection : public ParamServer
 {
-private:
+ private:
   std::mutex imuLock;
   std::mutex odoLock;
 
@@ -94,9 +94,11 @@ private:
   double timeScanEnd; // scan end moment
   std_msgs::Header cloudHeader;
 
-public:
-  ImageProjection() : deskewFlag(0)
-  { // subscriber, 订阅imu和odometry以及原始点云，这里的odom应该是 gps+imu 通过 robot_localization 包融合得到的.???
+ public:
+  ImageProjection() :
+    deskewFlag(0)
+  {
+    // subscriber, 订阅imu和odometry以及原始点云，这里的odom应该是 gps+imu 通过 robot_localization 包融合得到的.
     // imu和odom callback中主要是用来装数据
     subImu = nh.subscribe<sensor_msgs::Imu>(imuTopic, 2000, &ImageProjection::imuHandler, this,
                                             ros::TransportHints().tcpNoDelay()); // 允许指定hints到roscpp的传输层
@@ -112,8 +114,7 @@ public:
     allocateMemory(); // only define pointer before, here allocate for pointer
     resetParameters();
     // setVerbosityLevel:用于设置控制台输出的信息(设置冗长级别)
-    //  L_ALWAYS:不会输出任何信息；L_DEBUG:输出DEBUG信息
-    //  L_INFO,;L_VERBOSE
+    //  L_ALWAYS:不会输出任何信息；L_DEBUG:输出DEBUG信息; L_INFO,;L_VERBOSE
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
   }
 
@@ -155,14 +156,18 @@ public:
   {
     // whether laser cloud is valid; get new cloud，并检查当前点云帧里面是否有ring和time通道
     if (!cachePointCloud(laserCloudMsg))
+    {
       return;
+    }
 
     /*配置好用于去畸变的imu和odom参数 before --->
       找到点云时间戳前后的GPS odom和imu 数据 --->
       并分别计算在这两帧时间内的位姿增量和旋转增量
     */
     if (!deskewInfo())
+    {
       return;
+    }
 
     // 点云投影成深度图->去畸变
     projectPointCloud();
@@ -182,7 +187,9 @@ public:
     // cache point cloud
     cloudQueue.push_back(*laserCloudMsg);
     if (cloudQueue.size() <= 2)
+    {
       return false;
+    }
 
     // when cache enough cloud, convert cloud; 点云队列先进先出,最早的点云存到currentCloudMsg
     currentCloudMsg = std::move(cloudQueue.front());
@@ -194,7 +201,6 @@ public:
     }
     else if (sensor == SensorType::OUSTER)
     {
-
       // 从ros消息转换为OusterPointXYZIRT格式的点云
       pcl::moveFromROSMsg(currentCloudMsg, *tmpOusterCloudIn);
       laserCloudIn->points.resize(tmpOusterCloudIn->size());
@@ -202,14 +208,14 @@ public:
       // Convert to Velodyne format
       for (size_t i = 0; i < tmpOusterCloudIn->size(); i++)
       {
-        auto &src = tmpOusterCloudIn->points[i];
-        auto &dst = laserCloudIn->points[i];
-        dst.x = src.x;
-        dst.y = src.y;
-        dst.z = src.z;
+        auto &src     = tmpOusterCloudIn->points[i];
+        auto &dst     = laserCloudIn->points[i];
+        dst.x         = src.x;
+        dst.y         = src.y;
+        dst.z         = src.z;
         dst.intensity = src.intensity;
-        dst.ring = src.ring;
-        dst.time = src.t * 1e-9f;
+        dst.ring      = src.ring;
+        dst.time      = src.t * 1e-9f;
       }
     }
     else
@@ -286,9 +292,7 @@ public:
 
     // make sure IMU data available for the scan and imu data cover this scan cloud in time
     // 保证imu和odom数据，并且当前帧点云数据, 其时间戳在队列中的imu数据之间
-    if (imuQueue.empty() ||
-        imuQueue.front().header.stamp.toSec() > timeScanCur ||
-        imuQueue.back().header.stamp.toSec() < timeScanEnd)
+    if (imuQueue.empty() || imuQueue.front().header.stamp.toSec() > timeScanCur || imuQueue.back().header.stamp.toSec() < timeScanEnd)
     {
       ROS_DEBUG("Waiting for IMU data ...");
       return false;
@@ -304,10 +308,11 @@ public:
 
   void imuDeskewInfo()
   {
-    // 这个参数在地图优化程序中用到  首先为false 完成相关操作后置true ???
+    // 这个参数在地图优化程序中用到  首先为false 完成相关操作后置true
     cloudInfo.imuAvailable = false;
     while (!imuQueue.empty())
-    { // pop old imu data that earlier than first point of cloud
+    {
+      // pop old imu data that earlier than first point of cloud
       // 0.01 is allowance to avoid pop needed imu data
       // timeScanCur指当前点云帧的时间戳
       if (imuQueue.front().header.stamp.toSec() < timeScanCur - 0.01)
@@ -315,18 +320,22 @@ public:
         imuQueue.pop_front();
       }
       else
+      {
         break;
+      }
     }
 
     if (imuQueue.empty())
+    {
       return;
+    }
 
     imuPointerCur = 0;
 
     for (int i = 0; i < (int)imuQueue.size(); ++i)
     {
       sensor_msgs::Imu thisImuMsg = imuQueue[i];
-      double currentImuTime = thisImuMsg.header.stamp.toSec();
+      double currentImuTime       = thisImuMsg.header.stamp.toSec();
       // get roll, pitch, and yaw estimation for this scan
       if (currentImuTime <= timeScanCur)
       {
@@ -337,7 +346,9 @@ public:
 
       // break if traverse this scan; 如果当前Imu时间比下一帧时间大于0.01退出, imu频率大于100hz才比较有用
       if (currentImuTime > timeScanEnd + 0.01)
+      {
         break;
+      }
 
       // 第一次初始化时以下值都是0
       if (imuPointerCur == 0)
@@ -356,7 +367,7 @@ public:
 
       // integrate rotation
       // get attitude angle at every moment to look up corresponding data of every point
-      double timeDiff = currentImuTime - imuTime[imuPointerCur - 1];              // time fifference of two imu frame
+      double timeDiff        = currentImuTime - imuTime[imuPointerCur - 1];       // time fifference of two imu frame
       imuRotX[imuPointerCur] = imuRotX[imuPointerCur - 1] + angular_x * timeDiff; // integration
       imuRotY[imuPointerCur] = imuRotY[imuPointerCur - 1] + angular_y * timeDiff;
       imuRotZ[imuPointerCur] = imuRotZ[imuPointerCur - 1] + angular_z * timeDiff;
@@ -366,8 +377,11 @@ public:
 
     --imuPointerCur;
 
+    // (imu Pointer num > 1)
     if (imuPointerCur <= 0)
-      return; // (imu Pointer num > 1)
+    {
+      return;
+    }
 
     // we can use imu data to deskew cloud
     cloudInfo.imuAvailable = true;
@@ -390,18 +404,23 @@ public:
         odomQueue.pop_front();
       }
       else
+      {
         break;
+      }
     }
 
     if (odomQueue.empty())
+    {
       return;
+    }
     // cloud time    ***
     // odom time      ****
     if (odomQueue.front().header.stamp.toSec() > timeScanCur)
+    {
       return;
+    }
 
-    // get start odometry at the beinning of the scan
-    // 遍历odom队列,将odom的位姿作为点云信息中预测位姿
+    // get start odometry at the beinning of the scan;遍历odom队列,将odom的位姿作为点云信息中预测位姿
     nav_msgs::Odometry startOdomMsg; // first odom data later than cloud start moment
     // look for first odom data later than cloud start moment
     for (int i = 0; i < (int)odomQueue.size(); ++i)
@@ -409,9 +428,13 @@ public:
       startOdomMsg = odomQueue[i];
       // 之前已经将小于timeScanCur超过0.01的数据弹出,所以startOdomMsg已经可代表起始激光扫描的起始时刻的里程计消息
       if (ROS_TIME(&startOdomMsg) < timeScanCur)
+      {
         continue;
+      }
       else
+      {
         break;
+      }
     }
 
     // convert pose from ros msg to tf quaternion
@@ -424,23 +447,24 @@ public:
 
     // 用当前odom队列的起始位姿作为当前点云的初始位姿
     // save odom pose in cloud start moment, Initial guess used in mapOptimization
-    cloudInfo.initialGuessX = startOdomMsg.pose.pose.position.x;
-    cloudInfo.initialGuessY = startOdomMsg.pose.pose.position.y;
-    cloudInfo.initialGuessZ = startOdomMsg.pose.pose.position.z;
-    cloudInfo.initialGuessRoll = roll;
+    cloudInfo.initialGuessX     = startOdomMsg.pose.pose.position.x;
+    cloudInfo.initialGuessY     = startOdomMsg.pose.pose.position.y;
+    cloudInfo.initialGuessZ     = startOdomMsg.pose.pose.position.z;
+    cloudInfo.initialGuessRoll  = roll;
     cloudInfo.initialGuessPitch = pitch;
-    cloudInfo.initialGuessYaw = yaw;
+    cloudInfo.initialGuessYaw   = yaw;
 
     cloudInfo.odomAvailable = true; // odom provide initial pose of this cloud frame
 
-    // get end odometry at the end of the scan
-    // 获得一帧扫描末尾的里程计消息,和初始位姿无关, 主要用于去畸变、运动补偿
+    // get end odometry at the end of the scan;获得一帧扫描末尾的里程计消息,和初始位姿无关, 主要用于去畸变、运动补偿
     odomDeskewFlag = false;
     // if odom can't cover end of this scan, we can't use odom data to deskew
     // cloud time    ***
     // odom time   ****
     if (odomQueue.back().header.stamp.toSec() < timeScanEnd)
+    {
       return;
+    }
 
     nav_msgs::Odometry endOdomMsg; // corresponding odom data of end point of this cloud
     // find corresponding odom data of end point of this cloud
@@ -448,14 +472,20 @@ public:
     {
       endOdomMsg = odomQueue[i];
       if (ROS_TIME(&endOdomMsg) < timeScanEnd)
+      {
         continue;
+      }
       else
+      {
         break;
+      }
     }
 
     // odom is degenerated, low confidence, we can't use to deskew
     if (int(round(startOdomMsg.pose.covariance[0])) != int(round(endOdomMsg.pose.covariance[0])))
+    {
       return;
+    }
     // convert start and end pose from pcl to affine
     Eigen::Affine3f transBegin = pcl::getTransformation(startOdomMsg.pose.pose.position.x,
                                                         startOdomMsg.pose.pose.position.y,
@@ -468,7 +498,7 @@ public:
                                                       endOdomMsg.pose.pose.position.y,
                                                       endOdomMsg.pose.pose.position.z,
                                                       roll, pitch, yaw);
-    // // 获得一帧扫描起始与结束时刻间的变换, 参考loam: trans between = end - start
+    // 获得一帧扫描起始与结束时刻间的变换, 参考loam: trans between = end - start
     Eigen::Affine3f transBt = transBegin.inverse() * transEnd;
 
     // 计算这个首尾odom的增量, 用于后续去畸变
@@ -478,18 +508,18 @@ public:
     odomDeskewFlag = true; // 标志位, odom can be used to deskew
   }
 
-  // project cloud to range map/matrix and save info of every point
+  // project cloud to range map/matrix and save info of every point；将点云投影成深度图
   void projectPointCloud()
-  { // 将点云投影成深度图
+  {
     int cloudSize = laserCloudIn->points.size();
     // range image projection
     for (int i = 0; i < cloudSize; ++i)
     {
       PointType thisPoint;
       // get a point
-      thisPoint.x = laserCloudIn->points[i].x;
-      thisPoint.y = laserCloudIn->points[i].y;
-      thisPoint.z = laserCloudIn->points[i].z;
+      thisPoint.x         = laserCloudIn->points[i].x;
+      thisPoint.y         = laserCloudIn->points[i].y;
+      thisPoint.z         = laserCloudIn->points[i].z;
       thisPoint.intensity = laserCloudIn->points[i].intensity;
 
       // range from point to lidar;
@@ -499,12 +529,18 @@ public:
       {
         continue;
       }
-      // 没有ring 的话需要依据垂直角度计算
+      // 没有 ring 的话需要依据垂直角度计算
       int rowIdn = laserCloudIn->points[i].ring; // in which scan/ring(horizonal) locate
+      // invalid row index
       if (rowIdn < 0 || rowIdn >= N_SCAN)
-        continue; // invalid row index
+      {
+        continue;
+      }
+      // skip some points when downsample
       if (rowIdn % downsampleRate != 0)
-        continue; // skip some points when downsample
+      {
+        continue;
+      }
 
       // 激光点的水平角度, 计算一帧点云转过多少度，进而计算每个点投影到深度图中的列id和时间戳
       float horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
@@ -514,13 +550,20 @@ public:
       // clockwise is forward direction; negative direction of x-axis is start direction
       int columnIdn = -round((horizonAngle - 90.0) / ang_res_x) + Horizon_SCAN / 2;
       if (columnIdn >= Horizon_SCAN)
+      {
         columnIdn -= Horizon_SCAN;
+      }
+      // invalid column index
       if (columnIdn < 0 || columnIdn >= Horizon_SCAN)
-        continue; // invalid column index
+      {
+        continue;
+      }
 
       // when cloud > 360, there is overlap. thus, it's possible that this position has been filled.
       if (rangeMat.at<float>(rowIdn, columnIdn) != FLT_MAX)
+      {
         continue;
+      }
 
       //  点云去畸变,运动补偿,这里需要用到雷达信息中的time这个field;
       thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].time);
@@ -530,15 +573,16 @@ public:
       int index = columnIdn + rowIdn * Horizon_SCAN;
       // save coordinate of this point; 去完畸变的点云存储到fullCloud中
       fullCloud->points[index] = thisPoint;
-    }
+    } // endfor: range image projection done
   }
 
   // 根据时间戳,对每个点去畸变
   PointType deskewPoint(PointType *point, double relTime)
   {
-
     if (deskewFlag == -1 || cloudInfo.imuAvailable == false)
+    {
       return *point;
+    }
     // rel time is relative time: rel time = point time - scan start moment
     double pointTime = timeScanCur + relTime; // point time is absolute time
 
@@ -555,18 +599,18 @@ public:
     {
       // relative pose of first point; pcl pose and rotation to eigen affine; 起始矩阵赋值再取逆
       transStartInverse = (pcl::getTransformation(posXCur, posYCur, posZCur, rotXCur, rotYCur, rotZCur)).inverse();
-      firstPointFlag = false;
+      firstPointFlag    = false;
     }
 
     // relative transformation from current point to start point; transform points to start
     Eigen::Affine3f transFinal = pcl::getTransformation(posXCur, posYCur, posZCur, rotXCur, rotYCur, rotZCur);
-    Eigen::Affine3f transBt = transStartInverse * transFinal; // this point - first point
+    Eigen::Affine3f transBt    = transStartInverse * transFinal; // this point - first point
 
     PointType newPoint;
     // deskew point to start moment
-    newPoint.x = transBt(0, 0) * point->x + transBt(0, 1) * point->y + transBt(0, 2) * point->z + transBt(0, 3);
-    newPoint.y = transBt(1, 0) * point->x + transBt(1, 1) * point->y + transBt(1, 2) * point->z + transBt(1, 3);
-    newPoint.z = transBt(2, 0) * point->x + transBt(2, 1) * point->y + transBt(2, 2) * point->z + transBt(2, 3);
+    newPoint.x         = transBt(0, 0) * point->x + transBt(0, 1) * point->y + transBt(0, 2) * point->z + transBt(0, 3);
+    newPoint.y         = transBt(1, 0) * point->x + transBt(1, 1) * point->y + transBt(1, 2) * point->z + transBt(1, 3);
+    newPoint.z         = transBt(2, 0) * point->x + transBt(2, 1) * point->y + transBt(2, 2) * point->z + transBt(2, 3);
     newPoint.intensity = point->intensity;
     return newPoint;
   }
@@ -582,7 +626,9 @@ public:
     while (imuPointerFront < imuPointerCur)
     { // find first imu data later than this point; 最终要保证点云时间在两帧imu数据中间
       if (pointTime < imuTime[imuPointerFront])
+      {
         break;
+      }
       ++imuPointerFront; // 当前point_time在imu_time前面，舍弃
     }
 
@@ -602,11 +648,11 @@ public:
     { // point time is between two imu data, back is the later one , front is the earlier one
       // linear interpolation
       int imuPointerBack = imuPointerFront - 1;
-      double ratioFront = (pointTime - imuTime[imuPointerBack]) / (imuTime[imuPointerFront] - imuTime[imuPointerBack]);
-      double ratioBack = (imuTime[imuPointerFront] - pointTime) / (imuTime[imuPointerFront] - imuTime[imuPointerBack]);
-      *rotXCur = imuRotX[imuPointerFront] * ratioFront + imuRotX[imuPointerBack] * ratioBack;
-      *rotYCur = imuRotY[imuPointerFront] * ratioFront + imuRotY[imuPointerBack] * ratioBack;
-      *rotZCur = imuRotZ[imuPointerFront] * ratioFront + imuRotZ[imuPointerBack] * ratioBack;
+      double ratioFront  = (pointTime - imuTime[imuPointerBack]) / (imuTime[imuPointerFront] - imuTime[imuPointerBack]);
+      double ratioBack   = (imuTime[imuPointerFront] - pointTime) / (imuTime[imuPointerFront] - imuTime[imuPointerBack]);
+      *rotXCur           = imuRotX[imuPointerFront] * ratioFront + imuRotX[imuPointerBack] * ratioBack;
+      *rotYCur           = imuRotY[imuPointerFront] * ratioFront + imuRotY[imuPointerBack] * ratioBack;
+      *rotZCur           = imuRotZ[imuPointerFront] * ratioFront + imuRotZ[imuPointerBack] * ratioBack;
     }
   }
 
@@ -627,9 +673,9 @@ public:
     // *posZCur = ratio * odomIncreZ;
   }
 
+  // 提取有效点云给odometry
   void cloudExtraction()
-  { // 提取点云给odometry
-
+  {
     int count = 0; // pocessing point index
     // extract segmented cloud for lidar odometry
     for (int i = 0; i < N_SCAN; ++i)
@@ -638,13 +684,14 @@ public:
 
       for (int j = 0; j < Horizon_SCAN; ++j)
       {
+        // invalid range; 图像上不一定每个位置都有点，只取有深度的点
         if (rangeMat.at<float>(i, j) != FLT_MAX)
-        { // invalid range; 图像上不一定每个位置都有点，只取有深度的点
+        {
           // mark the points' column index for marking occlusion later
           cloudInfo.pointColInd[count] = j;
           // save range info
           cloudInfo.pointRange[count] = rangeMat.at<float>(i, j);
-          // save extracted cloud, 3d coordiate
+          // save extracted cloud, 3d coordinate
           extractedCloud->push_back(fullCloud->points[j + i * Horizon_SCAN]);
           // size of extracted cloud
           ++count;
@@ -670,7 +717,7 @@ public:
     // reset range matrix for range image projection
     rangeMat = cv::Mat(N_SCAN, Horizon_SCAN, CV_32F, cv::Scalar::all(FLT_MAX));
 
-    imuPointerCur = 0;
+    imuPointerCur  = 0;
     firstPointFlag = true;
     odomDeskewFlag = false;
 

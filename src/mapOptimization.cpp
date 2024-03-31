@@ -1,8 +1,9 @@
 /*
 Description: [match=registration,estimated=optimized,preint=preintegration,lo=lidarodometry,Euler=Euler Angle,rotation=orientation,vertice=node]
-scan-map match and optimize; loop; gps fusion; factors graph optimization
-rotation is described by Euler, not quaternion or rotation vector or rotation matrix
 
+scan-map match and optimize; loop; gps fusion; factors graph optimization
+
+rotation is described by Euler, not quaternion or rotation vector or rotation matrix
 
 Author     : Ji Qingshi
 date       :
@@ -23,7 +24,7 @@ date       :
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
 #include <gtsam/nonlinear/Marginals.h> // Marginals类可以获得因子图中各个节点优化后的残差值
 #include <gtsam/nonlinear/Values.h>
-#include <gtsam/inference/Symbol.h> //???
+#include <gtsam/inference/Symbol.h>
 
 #include <gtsam/nonlinear/ISAM2.h>
 
@@ -53,7 +54,7 @@ typedef PointXYZIRPYT PointTypePose;
 
 class mapOptimization : public ParamServer
 {
-public:
+ public:
   // gtsam
   NonlinearFactorGraph gtSAMgraph;
   Values initialEstimate, isamCurrentEstimate, optimizedEstimate;
@@ -90,16 +91,16 @@ public:
   pcl::PointCloud<PointType>::Ptr copy_cloudKeyPoses3D;
   pcl::PointCloud<PointTypePose>::Ptr copy_cloudKeyPoses6D;
 
-  // corner feature set from odoOptimization
+  // corner feature set from odomOptimization
   pcl::PointCloud<PointType>::Ptr laserCloudCornerLast;
-  // surf feature set from odoOptimization
+  // surf feature set from odomOptimization
   pcl::PointCloud<PointType>::Ptr laserCloudSurfLast;
-  // downsampled corner featuer set from odoOptimization
+  // downsampled corner featuer set from odomOptimization
   pcl::PointCloud<PointType>::Ptr laserCloudCornerLastDS;
-  // downsampled surf featuer set from odoOptimization
+  // downsampled surf featuer set from odomOptimization
   pcl::PointCloud<PointType>::Ptr laserCloudSurfLastDS;
 
-  pcl::PointCloud<PointType>::Ptr laserCloudOri; // feature point for map optimization???
+  pcl::PointCloud<PointType>::Ptr laserCloudOri; // feature point for map optimization
   pcl::PointCloud<PointType>::Ptr coeffSel;      // jacobi and residual for map optimization
 
   std::vector<PointType> laserCloudOriCornerVec; // corner point holder for parallel computation
@@ -131,8 +132,7 @@ public:
   ros::Time timeLaserInfoStamp;
   double timeLaserInfoCur;
 
-  // best pose after last map optimization; roll,pitch,yaw, x,y,z,
-  // 将要用来优化的初始位姿变换
+  // 将要用来优化的初始位姿变换; best pose after last map optimization; roll,pitch,yaw, x,y,z
   float transformTobeMapped[6];
 
   std::mutex mtx;
@@ -142,9 +142,9 @@ public:
   cv::Mat matP;              // 作为临时使用的中间变量
 
   int laserCloudCornerFromMapDSNum = 0;
-  int laserCloudSurfFromMapDSNum = 0;
-  int laserCloudCornerLastDSNum = 0;
-  int laserCloudSurfLastDSNum = 0;
+  int laserCloudSurfFromMapDSNum   = 0;
+  int laserCloudCornerLastDSNum    = 0;
+  int laserCloudSurfLastDSNum      = 0;
 
   // if add gps constraint or loop and these two constraints haven't used for optimization, will be "true"
   // "true" means need to update isam several times
@@ -158,26 +158,26 @@ public:
   nav_msgs::Path globalPath;
 
   Eigen::Affine3f transPointAssociateToMap;       // 把点变换进地图坐标系
-  Eigen::Affine3f incrementalOdometryAffineFront; //  last optimized pose, also used for initial guess
+  Eigen::Affine3f incrementalOdometryAffineFront; // last optimized pose, also used for initial guess
   Eigen::Affine3f incrementalOdometryAffineBack;  // current optimized pose
 
   mapOptimization()
   {
     ISAM2Params parameters; // 在定义ISAM2实例的时候存储参数的变量
     parameters.relinearizeThreshold = 0.1;
-    parameters.relinearizeSkip = 1;
-    isam = new ISAM2(parameters);
+    parameters.relinearizeSkip      = 1;
+    isam                            = new ISAM2(parameters);
 
-    pubKeyPoses = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/trajectory", 1);
-    pubLaserCloudSurround = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/map_global", 1);
-    pubLaserOdometryGlobal = nh.advertise<nav_msgs::Odometry>("lio_sam/mapping/odometry", 1);
+    pubKeyPoses                 = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/trajectory", 1);
+    pubLaserCloudSurround       = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/map_global", 1);
+    pubLaserOdometryGlobal      = nh.advertise<nav_msgs::Odometry>("lio_sam/mapping/odometry", 1);
     pubLaserOdometryIncremental = nh.advertise<nav_msgs::Odometry>("lio_sam/mapping/odometry_incremental", 1);
-    pubPath = nh.advertise<nav_msgs::Path>("lio_sam/mapping/path", 1);
+    pubPath                     = nh.advertise<nav_msgs::Path>("lio_sam/mapping/path", 1);
 
     // 订阅分类好的cloud_info以及gps,用于后端优化和回环检测,
     // 注意gps接受的是nav_msgs::Odometry消息, 是通过robot_localization节点融合imu和gps数据得到的，这个过程没在这个程序里展示
     subCloud = nh.subscribe<lio_sam::cloud_info>("lio_sam/feature/cloud_info", 1, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
-    subGPS = nh.subscribe<nav_msgs::Odometry>(gpsTopic, 200, &mapOptimization::gpsHandler, this, ros::TransportHints().tcpNoDelay());
+    subGPS   = nh.subscribe<nav_msgs::Odometry>(gpsTopic, 200, &mapOptimization::gpsHandler, this, ros::TransportHints().tcpNoDelay());
     // Float64 Multi Array; add loop manually to optimize
     subLoop = nh.subscribe<std_msgs::Float64MultiArray>("lio_loop/loop_closure_detection", 1, &mapOptimization::loopInfoHandler, this, ros::TransportHints().tcpNoDelay());
 
@@ -186,12 +186,12 @@ public:
 
     // 回环检测相关的一些历史帧
     pubHistoryKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/icp_loop_closure_history_cloud", 1);
-    pubIcpKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/icp_loop_closure_corrected_cloud", 1);
+    pubIcpKeyFrames     = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/icp_loop_closure_corrected_cloud", 1);
     // Marker Array???
     pubLoopConstraintEdge = nh.advertise<visualization_msgs::MarkerArray>("/lio_sam/mapping/loop_closure_constraints", 1);
 
-    pubRecentKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/map_local", 1);
-    pubRecentKeyFrame = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/cloud_registered", 1);
+    pubRecentKeyFrames    = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/map_local", 1);
+    pubRecentKeyFrame     = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/cloud_registered", 1);
     pubCloudRegisteredRaw = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/cloud_registered_raw", 1);
 
     // 不同的特征进行滤波
@@ -214,13 +214,13 @@ public:
     kdtreeSurroundingKeyPoses.reset(new pcl::KdTreeFLANN<PointType>());
     kdtreeHistoryKeyPoses.reset(new pcl::KdTreeFLANN<PointType>());
 
-    // corner feature set from odoOptimization
+    // corner feature set from odomOptimization
     laserCloudCornerLast.reset(new pcl::PointCloud<PointType>());
-    // surf feature set from odoOptimization
+    // surf feature set from odomOptimization
     laserCloudSurfLast.reset(new pcl::PointCloud<PointType>());
-    // downsampled corner featuer set from odoOptimization
+    // downsampled corner featuer set from odomOptimization
     laserCloudCornerLastDS.reset(new pcl::PointCloud<PointType>());
-    // downsampled surf featuer set from odoOptimization
+    // downsampled surf featuer set from odomOptimization
     laserCloudSurfLastDS.reset(new pcl::PointCloud<PointType>());
 
     laserCloudOri.reset(new pcl::PointCloud<PointType>());
@@ -256,7 +256,7 @@ public:
   {
     // extract time stamp
     timeLaserInfoStamp = msgIn->header.stamp;
-    timeLaserInfoCur = msgIn->header.stamp.toSec(); // rosTime to double
+    timeLaserInfoCur   = msgIn->header.stamp.toSec(); // rosTime to double
 
     // extract info and feature cloud
     cloudInfo = *msgIn; // copy data(not address) in "msgin" to "cloud info"
@@ -270,31 +270,40 @@ public:
     if (timeLaserInfoCur - timeLastProcessing >= mappingProcessInterval)
     {
       timeLastProcessing = timeLaserInfoCur;
+
       // map optimized pose + imu --> initial pose for map optimization
       updateInitialGuess();
-      // as function name and to construct local map(corner map and surf map)
+
+      // as function name, construct local map(corner map and surf map)
       extractSurroundingKeyFrames();
+
       // 不同的leaf size进行下采样，主要是corner cloud和surface cloud
       downsampleCurrentScan();
+
       // 构建点到平面、点到直线的残差, 用高斯牛顿法进行优化
       // construct optimization function of point cloud registration and solve function
       scan2MapOptimization(); // scan to map registration
+
       // 添加factor,保存key pose之类的
       // judge whether is key frame according to registration result; update factor and optimal pose
       saveKeyFramesAndFactor();
+
       // correct global path/trajectory
       correctPoses();
-      // publish lidar odom; // 发布增量平滑后的odom
+
+      // publish lidar odom; 发布增量平滑后的odom
       publishOdometry();
+
       // publish visualized point cloud
       publishFrames();
     }
   }
 
-  // as point cloud registration based on optimization,
-  // initial value is essential(fast convergence, avoidance local solution)
+  // as point cloud registration based on optimization, initial value is essential
+  // (fast convergence, avoidance local solution)
   void updateInitialGuess()
-  { // map optimized pose + imu --> initial pose for map optimization
+  {
+    // map optimized pose + imu --> initial pose for map optimization
     // 更新初始位姿, 来源可以是GPS ODOM, 也可以是上一帧的位姿, 存在transformTobeMapped中
     // save current transformation before any processing
     incrementalOdometryAffineFront = trans2Affine3f(transformTobeMapped);
@@ -312,28 +321,35 @@ public:
 
       // for VIO or LIO (tight coupling with imu), 系统的不可观为4自由度(translation, yaw)
       // roll and pitch is 可观的 for imu(gravity)
-      // 这里有磁力计将yaw对齐，但是也可以考虑不使用yaw
+      // 这里有磁力计将yaw对齐，但是也可以考虑不使用yaw, set yaw as zero
       if (!useImuHeadingInitialization)
-        transformTobeMapped[2] = 0; // set yaw as zero
+      {
+        transformTobeMapped[2] = 0;
+      }
       // 获取初始的transform: save pose from magnetometer before return; translation is 0;
-      lastImuTransformation = pcl::getTransformation(0, 0, 0, cloudInfo.imuRollInit, cloudInfo.imuPitchInit, cloudInfo.imuYawInit);
+      lastImuTransformation = pcl::getTransformation(0, 0, 0,
+                                                     cloudInfo.imuRollInit,
+                                                     cloudInfo.imuPitchInit,
+                                                     cloudInfo.imuYawInit);
       return;
     }
 
-    // use imu pre-integration estimation for pose guess
-    // map optimization is necessary during imu preint,
-    // thus initialized system don't contain imu preint because no map optimization is performed
+    // use imu pre-integration estimation for pose guess.
+    // map optimization is necessary during imu preint, thus initialized system don't contain imu preint because no
+    // map optimization is performed
     static bool lastImuPreTransAvailable = false; // whether recieve first frame of imupreint odom
     static Eigen::Affine3f lastImuPreTransformation;
 
-    // odom可用的话, 使用mu odom作为初始位姿, 每个点在imuPreintexx.cpp中会实时进行预计分优化, 并存储其优化后的odom
+    // odom可用的话, 使用imu odom作为初始位姿. 每帧imu在imuPreintexx.cpp中会实时进行预积分优化, 并存储其优化后的odom
+    // if odom provided by imupreint is available
     if (cloudInfo.odomAvailable == true)
-    { // if odom provided by imupreint is available
+    {
       // convert imu preint from pcl to eigen; current imu preint
       Eigen::Affine3f transBack = pcl::getTransformation(cloudInfo.initialGuessX, cloudInfo.initialGuessY, cloudInfo.initialGuessZ,
                                                          cloudInfo.initialGuessRoll, cloudInfo.initialGuessPitch, cloudInfo.initialGuessYaw);
+      // if haven't recieved first frame of imupreint odom
       if (lastImuPreTransAvailable == false)
-      { // haven't recieved first frame of imupreint odom
+      {
         // save current preint odom data
         lastImuPreTransformation = transBack;
         lastImuPreTransAvailable = true;
@@ -354,7 +370,10 @@ public:
         // save current imu preint
         lastImuPreTransformation = transBack;
         // save 磁力计 orientatiion data in case odom is not available broken
-        lastImuTransformation = pcl::getTransformation(0, 0, 0, cloudInfo.imuRollInit, cloudInfo.imuPitchInit, cloudInfo.imuYawInit);
+        lastImuTransformation = pcl::getTransformation(0, 0, 0,
+                                                       cloudInfo.imuRollInit,
+                                                       cloudInfo.imuPitchInit,
+                                                       cloudInfo.imuYawInit);
         return;
       }
     }
@@ -364,12 +383,12 @@ public:
     if (cloudInfo.imuAvailable == true)
     {
       // same as mentioned above
-      Eigen::Affine3f transBack = pcl::getTransformation(0, 0, 0,
-                                                         cloudInfo.imuRollInit,
-                                                         cloudInfo.imuPitchInit,
-                                                         cloudInfo.imuYawInit);
+      Eigen::Affine3f transBack  = pcl::getTransformation(0, 0, 0,
+                                                          cloudInfo.imuRollInit,
+                                                          cloudInfo.imuPitchInit,
+                                                          cloudInfo.imuYawInit);
       Eigen::Affine3f transIncre = lastImuTransformation.inverse() * transBack;
-      Eigen::Affine3f transTobe = trans2Affine3f(transformTobeMapped);
+      Eigen::Affine3f transTobe  = trans2Affine3f(transformTobeMapped);
       Eigen::Affine3f transFinal = transTobe * transIncre;
       pcl::getTranslationAndEulerAngles(transFinal,
                                         transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5],
@@ -392,8 +411,11 @@ public:
 
   void extractSurroundingKeyFrames()
   {
+    // if no key frame
     if (cloudKeyPoses3D->points.empty() == true)
-      return; // no key frame
+    {
+      return;
+    }
     // 检测到了回环就提取回环帧,否则提取附近点云
     // 第一次进来loopClosureEnableFlag = false, 直接提取附近关键帧
     // if (loopClosureEnableFlag == true)
@@ -437,7 +459,7 @@ public:
     kdtreeSurroundingKeyPoses->setInputCloud(cloudKeyPoses3D); // create kd-tree
     // extract key frame around last key frame(close in space) to construct local map
     kdtreeSurroundingKeyPoses->radiusSearch(cloudKeyPoses3D->back(), (double)surroundingKeyframeSearchRadius, pointSearchInd, pointSearchSqDis);
-    // save these key frame into cloud pointer; 满足要求的点云帧加到surroundingKeyPoses中
+    // save these key frames into cloud pointer; 满足要求的点云帧加到surroundingKeyPoses中
     for (int i = 0; i < (int)pointSearchInd.size(); ++i)
     {
       int id = pointSearchInd[i];
@@ -447,12 +469,12 @@ public:
     // in case key frame are too much
     downSizeFilterSurroundingKeyPoses.setInputCloud(surroundingKeyPoses);
     downSizeFilterSurroundingKeyPoses.filter(*surroundingKeyPosesDS); // here is not intensity
-    // range-based for loop;
+    // range-based for loop; traverse all points in key frame
     for (auto &pt : surroundingKeyPosesDS->points)
-    { // traverse all points in key frame
+    {
       // find nearest key frame(original frame) of every downsized frame(pt)
       kdtreeSurroundingKeyPoses->nearestKSearch(pt, 1, pointSearchInd, pointSearchSqDis);
-      //  assign its intensity to pt
+      //  assign its intensity to pt. intensity is index of key frame
       pt.intensity = cloudKeyPoses3D->points[pointSearchInd[0]].intensity;
     }
 
@@ -461,13 +483,15 @@ public:
     // traverse from last one to early one;
     for (int i = numPoses - 1; i >= 0; --i)
     {
-      // 把10s内的关键帧也加到surroundingKeyPosesDS中
+      // 把10s内的关键帧也加到surroundingKeyPosesDS中; key frame generated in last 10s
       if (timeLaserInfoCur - cloudKeyPoses6D->points[i].time < 10.0)
-      { // key frame generated in last 10s
+      {
         surroundingKeyPosesDS->push_back(cloudKeyPoses3D->points[i]);
       }
       else
+      {
         break;
+      }
     }
 
     // construct local map with extracted key frame
@@ -489,6 +513,7 @@ public:
 
       // intensity is index of key frame, which this point locate
       int thisKeyInd = (int)cloudToExtract->points[i].intensity;
+      // if this frame is in container, add this frame to map, else add it to container and to map
       if (laserCloudMapContainer.find(thisKeyInd) != laserCloudMapContainer.end())
       {
         // transformed cloud available; extract point from map into local map
@@ -499,13 +524,13 @@ public:
       {
         // transformed cloud not available; transform cloud to global coordinate system(cloud info, 6D pose)
         pcl::PointCloud<PointType> laserCloudCornerTemp = *transformPointCloud(cornerCloudKeyFrames[thisKeyInd], &cloudKeyPoses6D->points[thisKeyInd]);
-        pcl::PointCloud<PointType> laserCloudSurfTemp = *transformPointCloud(surfCloudKeyFrames[thisKeyInd], &cloudKeyPoses6D->points[thisKeyInd]);
+        pcl::PointCloud<PointType> laserCloudSurfTemp   = *transformPointCloud(surfCloudKeyFrames[thisKeyInd], &cloudKeyPoses6D->points[thisKeyInd]);
         *laserCloudCornerFromMap += laserCloudCornerTemp;
         *laserCloudSurfFromMap += laserCloudSurfTemp;
         // save transformed cloud; 角点和面点构成一个pair放入地图容器
         laserCloudMapContainer[thisKeyInd] = make_pair(laserCloudCornerTemp, laserCloudSurfTemp);
       }
-    }
+    } // endfor: have add all valid frames to map
 
     // Downsample the surrounding corner key frames (or map)
     downSizeFilterCorner.setInputCloud(laserCloudCornerFromMap);
@@ -518,7 +543,9 @@ public:
 
     // clear map cache if too large
     if (laserCloudMapContainer.size() > 1000)
+    {
       laserCloudMapContainer.clear();
+    }
   }
 
   pcl::PointCloud<PointType>::Ptr transformPointCloud(pcl::PointCloud<PointType>::Ptr cloudIn, PointTypePose *transformIn)
@@ -536,9 +563,9 @@ public:
     {
       const auto &pointFrom = cloudIn->points[i];
       // out = R * in + t
-      cloudOut->points[i].x = transCur(0, 0) * pointFrom.x + transCur(0, 1) * pointFrom.y + transCur(0, 2) * pointFrom.z + transCur(0, 3);
-      cloudOut->points[i].y = transCur(1, 0) * pointFrom.x + transCur(1, 1) * pointFrom.y + transCur(1, 2) * pointFrom.z + transCur(1, 3);
-      cloudOut->points[i].z = transCur(2, 0) * pointFrom.x + transCur(2, 1) * pointFrom.y + transCur(2, 2) * pointFrom.z + transCur(2, 3);
+      cloudOut->points[i].x         = transCur(0, 0) * pointFrom.x + transCur(0, 1) * pointFrom.y + transCur(0, 2) * pointFrom.z + transCur(0, 3);
+      cloudOut->points[i].y         = transCur(1, 0) * pointFrom.x + transCur(1, 1) * pointFrom.y + transCur(1, 2) * pointFrom.z + transCur(1, 3);
+      cloudOut->points[i].z         = transCur(2, 0) * pointFrom.x + transCur(2, 1) * pointFrom.y + transCur(2, 2) * pointFrom.z + transCur(2, 3);
       cloudOut->points[i].intensity = pointFrom.intensity;
     }
     return cloudOut;
@@ -562,7 +589,9 @@ public:
   {
     // if no key frame, can't match
     if (cloudKeyPoses3D->points.empty())
+    {
       return;
+    }
 
     // there are enough feature points
     if (laserCloudCornerLastDSNum > edgeFeatureMinValidNum && laserCloudSurfLastDSNum > surfFeatureMinValidNum)
@@ -571,7 +600,7 @@ public:
       kdtreeCornerFromMap->setInputCloud(laserCloudCornerFromMapDS);
       kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
 
-      // iterative solution. use ceres to optimize in aloam; this code and loam use GaussNewton
+      // iterative solution. use ceres to optimize in aloam, while this code and loam use GaussNewton
       for (int iterCount = 0; iterCount < 30; iterCount++)
       {
         laserCloudOri->clear();
@@ -586,12 +615,14 @@ public:
 
         // optimize: 高斯牛顿法迭代优化
         if (LMOptimization(iterCount) == true)
+        {
           break;
+        }
       }
       // now optimization has been performed
 
       transformUpdate();
-    }
+    } // endif: enough feature points
     else
     {
       ROS_WARN("Not enough features! Only %d edge and %d planar features available.", laserCloudCornerLastDSNum, laserCloudSurfLastDSNum);
@@ -694,31 +725,25 @@ public:
           float l12 = sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2));
           // direction of vertial line from point O to edge AB = direction of cross multiplication of BA and OM
           // unit vector (vertial line) = direction of residual's gradient(decrease or increase???)
-          float la = ((y1 - y2) * ((x0 - x1) * (y0 - y2) - (x0 - x2) * (y0 - y1)) +
-                      (z1 - z2) * ((x0 - x1) * (z0 - z2) - (x0 - x2) * (z0 - z1))) /
-                     a012 / l12;
-          float lb = -((x1 - x2) * ((x0 - x1) * (y0 - y2) - (x0 - x2) * (y0 - y1)) -
-                       (z1 - z2) * ((y0 - y1) * (z0 - z2) - (y0 - y2) * (z0 - z1))) /
-                     a012 / l12;
-          float lc = -((x1 - x2) * ((x0 - x1) * (z0 - z2) - (x0 - x2) * (z0 - z1)) +
-                       (y1 - y2) * ((y0 - y1) * (z0 - z2) - (y0 - y2) * (z0 - z1))) /
-                     a012 / l12;
+          float la  = ((y1 - y2) * ((x0 - x1) * (y0 - y2) - (x0 - x2) * (y0 - y1)) + (z1 - z2) * ((x0 - x1) * (z0 - z2) - (x0 - x2) * (z0 - z1))) / a012 / l12;
+          float lb  = -((x1 - x2) * ((x0 - x1) * (y0 - y2) - (x0 - x2) * (y0 - y1)) - (z1 - z2) * ((y0 - y1) * (z0 - z2) - (y0 - y2) * (z0 - z1))) / a012 / l12;
+          float lc  = -((x1 - x2) * ((x0 - x1) * (z0 - z2) - (x0 - x2) * (z0 - z1)) + (y1 - y2) * ((y0 - y1) * (z0 - z2) - (y0 - y2) * (z0 - z1))) / a012 / l12;
           float ld2 = a012 / l12; // residual:distance between point O and edge AB
 
           // Kernel function to reduce weight of residual(large residual-->small weight)
           float s = 1 - 0.9 * fabs(ld2); // s>0, because distance(this point,nearest point) < 1
 
-          coeff.x = s * la;
-          coeff.y = s * lb;
-          coeff.z = s * lc;
+          coeff.x         = s * la;
+          coeff.y         = s * lb;
+          coeff.z         = s * lc;
           coeff.intensity = s * ld2;
 
           // this is a valid constraint for map optimization; residual < 10cm
           if (s > 0.1)
           {
-            laserCloudOriCornerVec[i] = pointOri;
-            coeffSelCornerVec[i] = coeff;      // xyz is jacobi direction, intensity is residual
-            laserCloudOriCornerFlag[i] = true; // this constraint is valid
+            laserCloudOriCornerVec[i]  = pointOri;
+            coeffSelCornerVec[i]       = coeff; // xyz is jacobi direction, intensity is residual
+            laserCloudOriCornerFlag[i] = true;  // this constraint is valid
           }
         }
       }
@@ -735,9 +760,9 @@ public:
   void pointAssociateToMap(PointType const *const pi, PointType *const po)
   {
     // po = R * pi + t
-    po->x = transPointAssociateToMap(0, 0) * pi->x + transPointAssociateToMap(0, 1) * pi->y + transPointAssociateToMap(0, 2) * pi->z + transPointAssociateToMap(0, 3);
-    po->y = transPointAssociateToMap(1, 0) * pi->x + transPointAssociateToMap(1, 1) * pi->y + transPointAssociateToMap(1, 2) * pi->z + transPointAssociateToMap(1, 3);
-    po->z = transPointAssociateToMap(2, 0) * pi->x + transPointAssociateToMap(2, 1) * pi->y + transPointAssociateToMap(2, 2) * pi->z + transPointAssociateToMap(2, 3);
+    po->x         = transPointAssociateToMap(0, 0) * pi->x + transPointAssociateToMap(0, 1) * pi->y + transPointAssociateToMap(0, 2) * pi->z + transPointAssociateToMap(0, 3);
+    po->y         = transPointAssociateToMap(1, 0) * pi->x + transPointAssociateToMap(1, 1) * pi->y + transPointAssociateToMap(1, 2) * pi->z + transPointAssociateToMap(1, 3);
+    po->z         = transPointAssociateToMap(2, 0) * pi->x + transPointAssociateToMap(2, 1) * pi->y + transPointAssociateToMap(2, 2) * pi->z + transPointAssociateToMap(2, 3);
     po->intensity = pi->intensity;
   }
 
@@ -764,8 +789,9 @@ public:
       matB0.fill(-1);
       matX0.setZero();
 
+      // the farmost point of 5 nearest points is valid
       if (pointSearchSqDis[4] < 1.0)
-      { // the farmost point of 5 nearest points is valid
+      {
         for (int j = 0; j < 5; j++)
         {
           matA0(j, 0) = laserCloudSurfFromMapDS->points[pointSearchInd[j]].x;
@@ -793,13 +819,15 @@ public:
 
         // 这里再次判断求解的方向向量和每个点相乘，最后结果是不是在误差范围内。
         bool planeValid = true;
+        // if one point of 5 points is far from this plane, curvature of this plane is large and this is a invalid palne
         for (int j = 0; j < 5; j++)
         {
           // 5 point locate in the same plane
-          // if one point of 5 points is far from this plane, curvature of this plane is large and this is a invalid palne
-          if (fabs(pa * laserCloudSurfFromMapDS->points[pointSearchInd[j]].x +
-                   pb * laserCloudSurfFromMapDS->points[pointSearchInd[j]].y +
-                   pc * laserCloudSurfFromMapDS->points[pointSearchInd[j]].z + pd) > 0.2)
+
+          if (fabs(pa * laserCloudSurfFromMapDS->points[pointSearchInd[j]].x
+                   + pb * laserCloudSurfFromMapDS->points[pointSearchInd[j]].y
+                   + pc * laserCloudSurfFromMapDS->points[pointSearchInd[j]].z + pd)
+              > 0.2)
           {
             planeValid = false;
             break;
@@ -812,17 +840,17 @@ public:
           float pd2 = pa * pointSel.x + pb * pointSel.y + pc * pointSel.z + pd;
 
           // how denonminator function??? |pointSel| is large, surf feature is more important than corner
-          float s = 1 - 0.9 * fabs(pd2) / sqrt(sqrt(pointSel.x * pointSel.x + pointSel.y * pointSel.y + pointSel.z * pointSel.z));
-          coeff.x = s * pa;
-          coeff.y = s * pb;
-          coeff.z = s * pc;
+          float s         = 1 - 0.9 * fabs(pd2) / sqrt(sqrt(pointSel.x * pointSel.x + pointSel.y * pointSel.y + pointSel.z * pointSel.z));
+          coeff.x         = s * pa;
+          coeff.y         = s * pb;
+          coeff.z         = s * pc;
           coeff.intensity = s * pd2;
 
           // 误差在允许的范围内的话把这个点放到点云laserCloudOri中去，把对应的向量coeff放到coeffSel中
           if (s > 0.1)
           {
-            laserCloudOriSurfVec[i] = pointOri;
-            coeffSelSurfVec[i] = coeff;
+            laserCloudOriSurfVec[i]  = pointOri;
+            coeffSelSurfVec[i]       = coeff;
             laserCloudOriSurfFlag[i] = true;
           }
         }
@@ -858,7 +886,8 @@ public:
   }
 
   bool LMOptimization(int iterCount)
-  { // Gauss-Newton
+  {
+    // Gauss-Newton
     // This optimization is from the original loam_velodyne by Ji Zhang, need to cope with coordinate transformation
     // lidar <- camera      ---     camera <- lidar
     // x = z                ---     x = y
@@ -882,8 +911,11 @@ public:
     float crz = cos(transformTobeMapped[0]); // roll in lidar frame
 
     int laserCloudSelNum = laserCloudOri->size();
+    // if constraints is few
     if (laserCloudSelNum < 50)
-      return false; // constraints is few
+    {
+      return false;
+    }
 
     // 每个点的残差的旋转和平移的雅可比;旋转的雅可比需要求导,平移的雅可比为残差的方向
     cv::Mat matA(laserCloudSelNum, 6, CV_32F, cv::Scalar::all(0));
@@ -899,26 +931,21 @@ public:
     {
       // transform point and unit vector from point to line/surf to camera coordinate system
       // lidar -> camera
-      pointOri.x = laserCloudOri->points[i].y;
-      pointOri.y = laserCloudOri->points[i].z;
-      pointOri.z = laserCloudOri->points[i].x;
-      coeff.x = coeffSel->points[i].y;
-      coeff.y = coeffSel->points[i].z;
-      coeff.z = coeffSel->points[i].x;
+      pointOri.x      = laserCloudOri->points[i].y;
+      pointOri.y      = laserCloudOri->points[i].z;
+      pointOri.z      = laserCloudOri->points[i].x;
+      coeff.x         = coeffSel->points[i].y;
+      coeff.y         = coeffSel->points[i].z;
+      coeff.z         = coeffSel->points[i].x;
       coeff.intensity = coeffSel->points[i].intensity;
       // in camera
       // calculate jacobi of rotation(rotate around yxz in camera <-> around zyx in lidar)
       // roll
-      float arx = (crx * sry * srz * pointOri.x + crx * crz * sry * pointOri.y - srx * sry * pointOri.z) * coeff.x +
-                  (-srx * srz * pointOri.x - crz * srx * pointOri.y - crx * pointOri.z) * coeff.y +
-                  (crx * cry * srz * pointOri.x + crx * cry * crz * pointOri.y - cry * srx * pointOri.z) * coeff.z;
+      float arx = (crx * sry * srz * pointOri.x + crx * crz * sry * pointOri.y - srx * sry * pointOri.z) * coeff.x + (-srx * srz * pointOri.x - crz * srx * pointOri.y - crx * pointOri.z) * coeff.y + (crx * cry * srz * pointOri.x + crx * cry * crz * pointOri.y - cry * srx * pointOri.z) * coeff.z;
       // pitch
-      float ary = ((cry * srx * srz - crz * sry) * pointOri.x + (sry * srz + cry * crz * srx) * pointOri.y + crx * cry * pointOri.z) * coeff.x +
-                  ((-cry * crz - srx * sry * srz) * pointOri.x + (cry * srz - crz * srx * sry) * pointOri.y - crx * sry * pointOri.z) * coeff.z;
+      float ary = ((cry * srx * srz - crz * sry) * pointOri.x + (sry * srz + cry * crz * srx) * pointOri.y + crx * cry * pointOri.z) * coeff.x + ((-cry * crz - srx * sry * srz) * pointOri.x + (cry * srz - crz * srx * sry) * pointOri.y - crx * sry * pointOri.z) * coeff.z;
       // yaw
-      float arz = ((crz * srx * sry - cry * srz) * pointOri.x + (-cry * crz - srx * sry * srz) * pointOri.y) * coeff.x +
-                  (crx * crz * pointOri.x - crx * srz * pointOri.y) * coeff.y +
-                  ((sry * srz + cry * crz * srx) * pointOri.x + (crz * sry - cry * srx * srz) * pointOri.y) * coeff.z;
+      float arz = ((crz * srx * sry - cry * srz) * pointOri.x + (-cry * crz - srx * sry * srz) * pointOri.y) * coeff.x + (crx * crz * pointOri.x - crx * srz * pointOri.y) * coeff.y + ((sry * srz + cry * crz * srx) * pointOri.x + (crz * sry - cry * srx * srz) * pointOri.y) * coeff.z;
       // lidar -> camera
       matA.at<float>(i, 0) = arz; // jacobi of rotation
       matA.at<float>(i, 1) = arx;
@@ -937,8 +964,9 @@ public:
     // QR factorization; the system can be over-defined and/or the matrix src1 can be singular
     cv::solve(matAtA, matAtB, matX, cv::DECOMP_QR); // Ax=B->get x(deltax)
 
+    // if it's the first iteration, check whether degenerated
     if (iterCount == 0)
-    { // check whether degenerated
+    {
       cv::Mat matE(1, 6, CV_32F, cv::Scalar::all(0));
       cv::Mat matV(6, 6, CV_32F, cv::Scalar::all(0));
       cv::Mat matV2(6, 6, CV_32F, cv::Scalar::all(0));
@@ -946,10 +974,11 @@ public:
       cv::eigen(matAtA, matE, matV); // mat E: eigenvalue, max->min; mat V: eigenvector
       matV.copyTo(matV2);
 
-      isDegenerate = false;
+      isDegenerate      = false;
       float eignThre[6] = {100, 100, 100, 100, 100, 100}; // eigenthresold
+      // traverse eigen value from min to max
       for (int i = 5; i >= 0; i--)
-      { // traverse from min to max
+      {
         // eigenvalue < eigenthresold,特征值太小,说明矩阵在相应的特征向量方向退化
         if (matE.at<float>(0, i) < eignThre[i])
         {
@@ -969,8 +998,9 @@ public:
     // for example, in a long corridor, cant estimate translation in direction of corridor,
     // thus, corresponding vector is degenerated and corresponding component of delta x should be zero
 
+    // if degenerate, set degenerated component of delta x as zero
     if (isDegenerate)
-    { // set degenerated component of delta x as zero
+    {
       cv::Mat matX2(6, 1, CV_32F, cv::Scalar::all(0));
       matX.copyTo(matX2); // don't update
       matX = matP * matX2;
@@ -984,12 +1014,8 @@ public:
     transformTobeMapped[4] += matX.at<float>(4, 0);
     transformTobeMapped[5] += matX.at<float>(5, 0);
 
-    float deltaR = sqrt(pow(pcl::rad2deg(matX.at<float>(0, 0)), 2) +
-                        pow(pcl::rad2deg(matX.at<float>(1, 0)), 2) +
-                        pow(pcl::rad2deg(matX.at<float>(2, 0)), 2)); // unit is degree
-    float deltaT = sqrt(pow(matX.at<float>(3, 0) * 100, 2) +
-                        pow(matX.at<float>(4, 0) * 100, 2) +
-                        pow(matX.at<float>(5, 0) * 100, 2)); // unit is cm
+    float deltaR = sqrt(pow(pcl::rad2deg(matX.at<float>(0, 0)), 2) + pow(pcl::rad2deg(matX.at<float>(1, 0)), 2) + pow(pcl::rad2deg(matX.at<float>(2, 0)), 2)); // unit is degree
+    float deltaT = sqrt(pow(matX.at<float>(3, 0) * 100, 2) + pow(matX.at<float>(4, 0) * 100, 2) + pow(matX.at<float>(5, 0) * 100, 2));                         // unit is cm
 
     if (deltaR < 0.05 && deltaT < 0.05)
     {
@@ -1001,11 +1027,13 @@ public:
   // weighted fuse transformTobeMapped and imu
   void transformUpdate()
   {
+    // if state of 9-axis imu in global is available
     if (cloudInfo.imuAvailable == true)
-    { // state of 9-axis imu in global is available
+    {
+      // avoid that interpolation result is singular; pitch won't be close to 90°
       if (std::abs(cloudInfo.imuPitchInit) < 1.4)
-      { // avoid that interpolation result is singular(how???)
-        // roll and pitch is observable, so weighted fuse pose from lidar estimated and magnetometer???
+      {
+        // roll and pitch is observable from gravity, so weighted fuse pose from lidar estimated and magnetometer
         double imuWeight = imuRPYWeight;
         tf::Quaternion imuQuaternion;
         tf::Quaternion transformQuaternion;
@@ -1038,9 +1066,13 @@ public:
   float constraintTransformation(float value, float limit)
   {
     if (value < -limit)
+    {
       value = -limit;
+    }
     if (value > limit)
+    {
       value = limit;
+    }
 
     return value;
   }
@@ -1049,7 +1081,9 @@ public:
   {
     // judge whether this frame is key frame by increment of translation and rotation
     if (saveFrame() == false)
+    {
       return;
+    }
 
     // if is key frame, add factor to isam
     addOdomFactor(); // odom factor
@@ -1065,8 +1099,7 @@ public:
     isam->update(gtSAMgraph, initialEstimate);
     isam->update();
 
-    // if add gps constraint or loop, isam need to optimize several times
-    // because more vertices will be corrected
+    // if add gps constraint or loop, isam need to optimize several times, because many vertices will be corrected
     if (aLoopIsClosed == true)
     {
       isam->update();
@@ -1094,20 +1127,20 @@ public:
     // cout << "****************************************************" << endl;
     // isamCurrentEstimate.print("Current estimate: ");
     // 这里不断的增加关键帧到cloudKeyPoses3D、cloudKeyPoses6D中
-    thisPose3D.x = latestEstimate.translation().x();
-    thisPose3D.y = latestEstimate.translation().y();
-    thisPose3D.z = latestEstimate.translation().z();
+    thisPose3D.x         = latestEstimate.translation().x();
+    thisPose3D.y         = latestEstimate.translation().y();
+    thisPose3D.z         = latestEstimate.translation().z();
     thisPose3D.intensity = cloudKeyPoses3D->size(); // this can be used as index
     cloudKeyPoses3D->push_back(thisPose3D);
 
-    thisPose6D.x = thisPose3D.x;
-    thisPose6D.y = thisPose3D.y;
-    thisPose6D.z = thisPose3D.z;
+    thisPose6D.x         = thisPose3D.x;
+    thisPose6D.y         = thisPose3D.y;
+    thisPose6D.z         = thisPose3D.z;
     thisPose6D.intensity = thisPose3D.intensity; // this can be used as index
-    thisPose6D.roll = latestEstimate.rotation().roll();
-    thisPose6D.pitch = latestEstimate.rotation().pitch();
-    thisPose6D.yaw = latestEstimate.rotation().yaw();
-    thisPose6D.time = timeLaserInfoCur;
+    thisPose6D.roll      = latestEstimate.rotation().roll();
+    thisPose6D.pitch     = latestEstimate.rotation().pitch();
+    thisPose6D.yaw       = latestEstimate.rotation().yaw();
+    thisPose6D.time      = timeLaserInfoCur;
     cloudKeyPoses6D->push_back(thisPose6D);
 
     // cout << "****************************************************" << endl;
@@ -1147,21 +1180,20 @@ public:
   {
     // if there isn't saved key frame, this frame is key frmae
     if (cloudKeyPoses3D->points.empty())
+    {
       return true;
+    }
 
     // last key frame
     Eigen::Affine3f transStart = pclPointToAffine3f(cloudKeyPoses6D->back());
     // convert current pose to eigen
-    Eigen::Affine3f transFinal = pcl::getTransformation(transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5],
-                                                        transformTobeMapped[0], transformTobeMapped[1], transformTobeMapped[2]);
+    Eigen::Affine3f transFinal   = pcl::getTransformation(transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5],
+                                                          transformTobeMapped[0], transformTobeMapped[1], transformTobeMapped[2]);
     Eigen::Affine3f transBetween = transStart.inverse() * transFinal;
     float x, y, z, roll, pitch, yaw;
     pcl::getTranslationAndEulerAngles(transBetween, x, y, z, roll, pitch, yaw);
 
-    if (abs(roll) < surroundingkeyframeAddingAngleThreshold &&
-        abs(pitch) < surroundingkeyframeAddingAngleThreshold &&
-        abs(yaw) < surroundingkeyframeAddingAngleThreshold &&
-        sqrt(x * x + y * y + z * z) < surroundingkeyframeAddingDistThreshold)
+    if (abs(roll) < surroundingkeyframeAddingAngleThreshold && abs(pitch) < surroundingkeyframeAddingAngleThreshold && abs(yaw) < surroundingkeyframeAddingAngleThreshold && sqrt(x * x + y * y + z * z) < surroundingkeyframeAddingDistThreshold)
     {
       return false;
     }
@@ -1175,8 +1207,9 @@ public:
 
   void addOdomFactor()
   {
-    if (cloudKeyPoses3D->points.empty())
-    { // if this frame is first key frame; rad*rad, meter*meter;
+    // uunit: rad*rad, meter*meter;
+    if (cloudKeyPoses3D->points.empty()) // if this frame is first key frame;
+    {
       // low cofidence, especially unobservable translation and yaw
       // translation: we will use GPS data later, thus we set low confidence for translation
       // yaw: magnetometer may not be well calibrated
@@ -1188,12 +1221,12 @@ public:
       initialEstimate.insert(0, trans2gtsamPose(transformTobeMapped)); // "0" means "first" node
       // (index of node = index of key frame)
     }
-    else
-    { // if not first key frame, add between factor
+    else // if not first key frame, add between factor
+    {
       // high confidence: LO
       noiseModel::Diagonal::shared_ptr odometryNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
-      gtsam::Pose3 poseFrom = pclPointTogtsamPose3(cloudKeyPoses6D->points.back()); // last key frame
-      gtsam::Pose3 poseTo = trans2gtsamPose(transformTobeMapped);                   // current
+      gtsam::Pose3 poseFrom                          = pclPointTogtsamPose3(cloudKeyPoses6D->points.back()); // last key frame
+      gtsam::Pose3 poseTo                            = trans2gtsamPose(transformTobeMapped);                 // current frame
       // between factor(index of last key frame(node), index of current(node), constraint, confidence)
       gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseFrom.between(poseTo), odometryNoise));
       // add node info(index of node, initial value(prior pose))
@@ -1216,24 +1249,30 @@ public:
   void addGPSFactor()
   {
     if (gpsQueue.empty())
+    {
       return;
+    }
 
-    // wait for system initialized and settles down
+    // if no key frame, wait for system initialized and settles down
     if (cloudKeyPoses3D->points.empty())
-    { // no key frame
+    {
       return;
     }
     else
     {
-      // first key frame and last key frame are close:
-      // will trigger loop(if loop, no need to use GPS) or just start
+      // if first key frame and last key frame are close, loop will be triggered (if loop, no need to use GPS)
+      // or it means system just start
       if (pointDistance(cloudKeyPoses3D->front(), cloudKeyPoses3D->back()) < 5.0)
+      {
         return;
+      }
     }
 
     // pose covariance small(high confidence), no need to correct
     if (poseCovariance(3, 3) < poseCovThreshold && poseCovariance(4, 4) < poseCovThreshold)
+    {
       return;
+    }
 
     // last gps position
     static PointType lastGPSPoint;
@@ -1242,12 +1281,14 @@ public:
     while (!gpsQueue.empty())
     {
       // 时间戳对齐
+      // if message too old
       if (gpsQueue.front().header.stamp.toSec() < timeLaserInfoCur - 0.2)
-      { // message too old
+      {
         gpsQueue.pop_front();
       }
+      // if message too new
       else if (gpsQueue.front().header.stamp.toSec() > timeLaserInfoCur + 0.2)
-      { // message too new
+      {
         break;
       }
       else // now gps time is close to current frame in time(-0.2 ~ 0.2)
@@ -1259,8 +1300,11 @@ public:
         float noise_x = thisGPS.pose.covariance[0];
         float noise_y = thisGPS.pose.covariance[7];
         float noise_z = thisGPS.pose.covariance[14];
+        // if low confidence
         if (noise_x > gpsCovThreshold || noise_y > gpsCovThreshold)
-          continue; // low confidence
+        {
+          continue;
+        }
 
         // get position from gps msg
         float gps_x = thisGPS.pose.pose.position.x;
@@ -1270,21 +1314,24 @@ public:
         // if gps z is accurate, we can use gps z to correct LO z(LO z is usually not accurate)
         if (!useGpsElevation)
         {
-          gps_z = transformTobeMapped[5]; // 此处假设gps的z不可信
+          gps_z   = transformTobeMapped[5]; // 此处假设gps的z不可信
           noise_z = 0.01;
         }
 
         // if x and y is too small, means that GPS not properly initialized (0,0,0)
         if (abs(gps_x) < 1e-6 && abs(gps_y) < 1e-6)
+        {
           continue;
+        }
 
         // Add GPS every a few meters
         PointType curGPSPoint;
         curGPSPoint.x = gps_x;
         curGPSPoint.y = gps_y;
         curGPSPoint.z = gps_z;
+        // add gps factor in a low frequence(interval > 5m)
         if (pointDistance(curGPSPoint, lastGPSPoint) < 5.0)
-        { // add gps factor in a low frequence(interval > 5s)
+        {
           continue;
         }
         else
@@ -1304,19 +1351,23 @@ public:
         // have added gps, need update isam several times
         aLoopIsClosed = true;
         break;
-      }
-    }
+      } // endif: add this valid gps
+
+    } // endwhile: have added all gps
   }
 
   void addLoopFactor()
   {
     // loop thread will detect loop and add loop to this queue
     if (loopIndexQueue.empty())
+    {
       return;
+    }
+    // add all loops in queue
     for (int i = 0; i < (int)loopIndexQueue.size(); ++i)
-    {                                          // add all loops in queue
-      int indexFrom = loopIndexQueue[i].first; // current frame
-      int indexTo = loopIndexQueue[i].second;  // prev frame
+    {
+      int indexFrom = loopIndexQueue[i].first;  // current frame
+      int indexTo   = loopIndexQueue[i].second; // prev frame
       // constraint between frames(between factor)
       gtsam::Pose3 poseBetween = loopPoseQueue[i];
       // confidence is ICP score
@@ -1335,12 +1386,12 @@ public:
   void updatePath(const PointTypePose &pose_in)
   {
     geometry_msgs::PoseStamped pose_stamped;
-    pose_stamped.header.stamp = ros::Time().fromSec(pose_in.time);
-    pose_stamped.header.frame_id = odometryFrame;
-    pose_stamped.pose.position.x = pose_in.x;
-    pose_stamped.pose.position.y = pose_in.y;
-    pose_stamped.pose.position.z = pose_in.z;
-    tf::Quaternion q = tf::createQuaternionFromRPY(pose_in.roll, pose_in.pitch, pose_in.yaw);
+    pose_stamped.header.stamp       = ros::Time().fromSec(pose_in.time);
+    pose_stamped.header.frame_id    = odometryFrame;
+    pose_stamped.pose.position.x    = pose_in.x;
+    pose_stamped.pose.position.y    = pose_in.y;
+    pose_stamped.pose.position.z    = pose_in.z;
+    tf::Quaternion q                = tf::createQuaternionFromRPY(pose_in.roll, pose_in.pitch, pose_in.yaw);
     pose_stamped.pose.orientation.x = q.x();
     pose_stamped.pose.orientation.y = q.y();
     pose_stamped.pose.orientation.z = q.z();
@@ -1352,7 +1403,9 @@ public:
   void correctPoses()
   {
     if (cloudKeyPoses3D->points.empty())
+    {
       return;
+    }
 
     // only loop and gps, which trigger global correction, can trigger to correct global trajectory
     if (aLoopIsClosed == true)
@@ -1364,18 +1417,19 @@ public:
       // update key poses
       int numPoses = isamCurrentEstimate.size();
 
+      // update all pose of key frames
       for (int i = 0; i < numPoses; ++i)
-      { // update all pose of key frames
+      {
         cloudKeyPoses3D->points[i].x = isamCurrentEstimate.at<Pose3>(i).translation().x();
         cloudKeyPoses3D->points[i].y = isamCurrentEstimate.at<Pose3>(i).translation().y();
         cloudKeyPoses3D->points[i].z = isamCurrentEstimate.at<Pose3>(i).translation().z();
 
-        cloudKeyPoses6D->points[i].x = cloudKeyPoses3D->points[i].x;
-        cloudKeyPoses6D->points[i].y = cloudKeyPoses3D->points[i].y;
-        cloudKeyPoses6D->points[i].z = cloudKeyPoses3D->points[i].z;
-        cloudKeyPoses6D->points[i].roll = isamCurrentEstimate.at<Pose3>(i).rotation().roll();
+        cloudKeyPoses6D->points[i].x     = cloudKeyPoses3D->points[i].x;
+        cloudKeyPoses6D->points[i].y     = cloudKeyPoses3D->points[i].y;
+        cloudKeyPoses6D->points[i].z     = cloudKeyPoses3D->points[i].z;
+        cloudKeyPoses6D->points[i].roll  = isamCurrentEstimate.at<Pose3>(i).rotation().roll();
         cloudKeyPoses6D->points[i].pitch = isamCurrentEstimate.at<Pose3>(i).rotation().pitch();
-        cloudKeyPoses6D->points[i].yaw = isamCurrentEstimate.at<Pose3>(i).rotation().yaw();
+        cloudKeyPoses6D->points[i].yaw   = isamCurrentEstimate.at<Pose3>(i).rotation().yaw();
 
         updatePath(cloudKeyPoses6D->points[i]); // for visualization
       }
@@ -1388,19 +1442,21 @@ public:
   {
     // Publish odometry for ROS (global)
     nav_msgs::Odometry laserOdometryROS;
-    laserOdometryROS.header.stamp = timeLaserInfoStamp;
-    laserOdometryROS.header.frame_id = odometryFrame;
-    laserOdometryROS.child_frame_id = "odom_mapping";
-    laserOdometryROS.pose.pose.position.x = transformTobeMapped[3];
-    laserOdometryROS.pose.pose.position.y = transformTobeMapped[4];
-    laserOdometryROS.pose.pose.position.z = transformTobeMapped[5];
-    laserOdometryROS.pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(transformTobeMapped[0], transformTobeMapped[1], transformTobeMapped[2]);
+    laserOdometryROS.header.stamp          = timeLaserInfoStamp;
+    laserOdometryROS.header.frame_id       = odometryFrame;
+    laserOdometryROS.child_frame_id        = "odom_mapping";
+    laserOdometryROS.pose.pose.position.x  = transformTobeMapped[3];
+    laserOdometryROS.pose.pose.position.y  = transformTobeMapped[4];
+    laserOdometryROS.pose.pose.position.z  = transformTobeMapped[5];
+    laserOdometryROS.pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(transformTobeMapped[0],
+                                                                                     transformTobeMapped[1],
+                                                                                     transformTobeMapped[2]);
     pubLaserOdometryGlobal.publish(laserOdometryROS);
 
     // Publish TF of lidar in odom coordinate
     static tf::TransformBroadcaster br;
-    tf::Transform t_odom_to_lidar = tf::Transform(tf::createQuaternionFromRPY(transformTobeMapped[0], transformTobeMapped[1], transformTobeMapped[2]),
-                                                  tf::Vector3(transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5]));
+    tf::Transform t_odom_to_lidar            = tf::Transform(tf::createQuaternionFromRPY(transformTobeMapped[0], transformTobeMapped[1], transformTobeMapped[2]),
+                                                             tf::Vector3(transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5]));
     tf::StampedTransform trans_odom_to_lidar = tf::StampedTransform(t_odom_to_lidar, timeLaserInfoStamp, odometryFrame, "lidar_link");
     br.sendTransform(trans_odom_to_lidar);
 
@@ -1408,8 +1464,10 @@ public:
     static bool lastIncreOdomPubFlag = false;       // whether has data in odom, "false" means no data
     static nav_msgs::Odometry laserOdomIncremental; // incremental odometry msg
     static Eigen::Affine3f increOdomAffine;         // incremental odometry in affine
+
+    // when this if statement is first performed
     if (lastIncreOdomPubFlag == false)
-    { // when this if statement is first performed
+    {
       lastIncreOdomPubFlag = true;
       laserOdomIncremental = laserOdometryROS;
       // when first perform, incremental is transformTobeMapped
@@ -1419,12 +1477,15 @@ public:
     {
       // incre = current optimized pose - last optimized pose (incre is generated by scan-map match)
       // (pose is gotten by scan-map matching, not by gps or loop)
+      // correction
       Eigen::Affine3f affineIncre = incrementalOdometryAffineFront.inverse() * incrementalOdometryAffineBack;
-      increOdomAffine = increOdomAffine * affineIncre; // add to last pose
+      increOdomAffine             = increOdomAffine * affineIncre; // add incre to last pose
       float x, y, z, roll, pitch, yaw;
       pcl::getTranslationAndEulerAngles(increOdomAffine, x, y, z, roll, pitch, yaw);
+
+      // if imu available, interpolate for roll and pitch
       if (cloudInfo.imuAvailable == true)
-      { // if imu available, interpolate for roll and pitch
+      {
         if (std::abs(cloudInfo.imuPitchInit) < 1.4)
         {
           double imuWeight = 0.1;
@@ -1445,12 +1506,12 @@ public:
           pitch = pitchMid;
         }
       }
-      laserOdomIncremental.header.stamp = timeLaserInfoStamp;
-      laserOdomIncremental.header.frame_id = odometryFrame;
-      laserOdomIncremental.child_frame_id = "odom_mapping";
-      laserOdomIncremental.pose.pose.position.x = x;
-      laserOdomIncremental.pose.pose.position.y = y;
-      laserOdomIncremental.pose.pose.position.z = z;
+      laserOdomIncremental.header.stamp          = timeLaserInfoStamp;
+      laserOdomIncremental.header.frame_id       = odometryFrame;
+      laserOdomIncremental.child_frame_id        = "odom_mapping";
+      laserOdomIncremental.pose.pose.position.x  = x;
+      laserOdomIncremental.pose.pose.position.y  = y;
+      laserOdomIncremental.pose.pose.position.z  = z;
       laserOdomIncremental.pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(roll, pitch, yaw);
       if (isDegenerate)
       {
@@ -1460,14 +1521,16 @@ public:
       {
         laserOdomIncremental.pose.covariance[0] = 0;
       }
-    }
+    } // endif: get incre odom
     pubLaserOdometryIncremental.publish(laserOdomIncremental);
   }
 
   void publishFrames()
   {
     if (cloudKeyPoses3D->points.empty())
+    {
       return;
+    }
 
     // publish key poses
     publishCloud(&pubKeyPoses, cloudKeyPoses3D, timeLaserInfoStamp, odometryFrame);
@@ -1489,14 +1552,14 @@ public:
       pcl::PointCloud<PointType>::Ptr cloudOut(new pcl::PointCloud<PointType>());
       pcl::fromROSMsg(cloudInfo.cloud_deskewed, *cloudOut);
       PointTypePose thisPose6D = trans2PointTypePose(transformTobeMapped);
-      *cloudOut = *transformPointCloud(cloudOut, &thisPose6D);
+      *cloudOut                = *transformPointCloud(cloudOut, &thisPose6D);
       // publish original raw cloud
       publishCloud(&pubCloudRegisteredRaw, cloudOut, timeLaserInfoStamp, odometryFrame);
     }
     // publish path
     if (pubPath.getNumSubscribers() != 0)
     {
-      globalPath.header.stamp = timeLaserInfoStamp;
+      globalPath.header.stamp    = timeLaserInfoStamp;
       globalPath.header.frame_id = odometryFrame;
       pubPath.publish(globalPath);
     }
@@ -1505,12 +1568,12 @@ public:
   PointTypePose trans2PointTypePose(float transformIn[])
   {
     PointTypePose thisPose6D;
-    thisPose6D.x = transformIn[3];
-    thisPose6D.y = transformIn[4];
-    thisPose6D.z = transformIn[5];
-    thisPose6D.roll = transformIn[0];
+    thisPose6D.x     = transformIn[3];
+    thisPose6D.y     = transformIn[4];
+    thisPose6D.z     = transformIn[5];
+    thisPose6D.roll  = transformIn[0];
     thisPose6D.pitch = transformIn[1];
-    thisPose6D.yaw = transformIn[2];
+    thisPose6D.yaw   = transformIn[2];
     return thisPose6D;
   }
 
@@ -1522,13 +1585,19 @@ public:
   void loopInfoHandler(const std_msgs::Float64MultiArray::ConstPtr &loopMsg)
   {
     std::lock_guard<std::mutex> lock(mtxLoopInfo);
+    // whether invalid loop
     if (loopMsg->data.size() != 2)
-      return; // invalid loop???
+    {
+      return;
+    }
 
     loopInfoVec.push_back(*loopMsg);
 
+    // pop old loop
     while (loopInfoVec.size() > 5)
-      loopInfoVec.pop_front(); // pop old loop
+    {
+      loopInfoVec.pop_front();
+    }
   }
 
   bool saveMapService(lio_sam::save_mapRequest &req, lio_sam::save_mapResponse &res)
@@ -1548,7 +1617,7 @@ public:
     // create directory and remove old files;
     // 递归地删除该文件夹；c_str() 函数返回一个指向正规C字符串的指针常量, 内容与本 string 串相同
     int unused = system((std::string("exec rm -r ") + saveMapDirectory).c_str());
-    // 在父个文件夹中创建文件夹，若父文件夹不存在则先创建父文件夹
+    // 若文件夹不存在则先创建文件夹，若文件夹存在则不做任何操作
     unused = system((std::string("mkdir -p ") + saveMapDirectory).c_str());
     // save key frame transformations 为二进制文件
     pcl::io::savePCDFileBinary(saveMapDirectory + "/trajectory.pcd", *cloudKeyPoses3D);
@@ -1559,8 +1628,9 @@ public:
     pcl::PointCloud<PointType>::Ptr globalSurfCloud(new pcl::PointCloud<PointType>());
     pcl::PointCloud<PointType>::Ptr globalSurfCloudDS(new pcl::PointCloud<PointType>());
     pcl::PointCloud<PointType>::Ptr globalMapCloud(new pcl::PointCloud<PointType>());
+    // 把关键帧转换进全局地图
     for (int i = 0; i < (int)cloudKeyPoses3D->size(); i++)
-    { // 把关键帧转换进全局地图
+    {
       *globalCornerCloud += *transformPointCloud(cornerCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
       *globalSurfCloud += *transformPointCloud(surfCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
       cout << "\r" << std::flush << "Processing feature cloud " << i << " of " << cloudKeyPoses6D->size() << " ...";
@@ -1592,7 +1662,7 @@ public:
     *globalMapCloud += *globalCornerCloud;
     *globalMapCloud += *globalSurfCloud;
 
-    int ret = pcl::io::savePCDFileBinary(saveMapDirectory + "/GlobalMap.pcd", *globalMapCloud);
+    int ret     = pcl::io::savePCDFileBinary(saveMapDirectory + "/GlobalMap.pcd", *globalMapCloud);
     res.success = ret == 0; //???
 
     downSizeFilterCorner.setLeafSize(mappingCornerLeafSize, mappingCornerLeafSize, mappingCornerLeafSize);
@@ -1609,7 +1679,9 @@ public:
   {
     // if loop isn't enabled, exit this thread
     if (loopClosureEnableFlag == false)
+    {
       return;
+    }
 
     ros::Rate rate(loopClosureFrequency);
     while (ros::ok())
@@ -1627,7 +1699,9 @@ public:
   {
     // no key frame, can't perform loop
     if (cloudKeyPoses3D->points.empty() == true)
+    {
       return;
+    }
 
     // pose3d and pose6d also are used in loop hander function, therefore copy key pose to avoid thread conflict
     mtx.lock();
@@ -1641,22 +1715,28 @@ public:
 
     // get external loop(added manually by ourselves) first
     // if(invalid loop or loop constraint has been added)  return; else have gotten loop frames, continue
-    if (detectLoopClosureExternal(&loopKeyCur, &loopKeyPre) == false)   // false means no loop, found
+    if (detectLoopClosureExternal(&loopKeyCur, &loopKeyPre) == false) // false means no loop, found
+    {
       if (detectLoopClosureDistance(&loopKeyCur, &loopKeyPre) == false) // false means no loop, found
+      {
         return;
+      }
+    }
 
     // get transformation between two loop frames by ICP
     // extract cloud
     pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
     pcl::PointCloud<PointType>::Ptr prevKeyframeCloud(new pcl::PointCloud<PointType>());
-    { // {}???
+    {
       // 0 means only itself
       loopFindNearKeyframes(cureKeyframeCloud, loopKeyCur, 0);
       // near key frames to construct local map
       loopFindNearKeyframes(prevKeyframeCloud, loopKeyPre, historyKeyframeSearchNum);
-      // (point in this cloud are too few)
+      // (points in this cloud are too few)
       if (cureKeyframeCloud->size() < 300 || prevKeyframeCloud->size() < 1000)
+      {
         return;
+      }
       if (pubHistoryKeyFrames.getNumSubscribers() != 0)
       {
         // publish local map to rviz
@@ -1681,7 +1761,9 @@ public:
 
     // inconverge or residual is too large; 通过icp score阈值判断是否匹配成功
     if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
+    {
       return;
+    }
 
     // publish corrected cloud to rviz
     if (pubIcpKeyFrames.getNumSubscribers() != 0)
@@ -1703,8 +1785,8 @@ public:
     pcl::getTranslationAndEulerAngles(tCorrect, x, y, z, roll, pitch, yaw); // affine to Euler
 
     // gtsam中添加回环的约束
-    gtsam::Pose3 poseFrom = Pose3(Rot3::RzRyRx(roll, pitch, yaw), Point3(x, y, z));       // corrected cur pose
-    gtsam::Pose3 poseTo = pclPointTogtsamPose3(copy_cloudKeyPoses6D->points[loopKeyPre]); // corrected prev pose
+    gtsam::Pose3 poseFrom = Pose3(Rot3::RzRyRx(roll, pitch, yaw), Point3(x, y, z));         // corrected cur pose
+    gtsam::Pose3 poseTo   = pclPointTogtsamPose3(copy_cloudKeyPoses6D->points[loopKeyPre]); // corrected prev pose
     gtsam::Vector Vector6(6);
     float noiseScore = icp.getFitnessScore(); // set icp score as noise
     Vector6 << noiseScore, noiseScore, noiseScore, noiseScore, noiseScore, noiseScore;
@@ -1731,7 +1813,9 @@ public:
     std::lock_guard<std::mutex> lock(mtxLoopInfo);
     // queue for prior loop msg from outside
     if (loopInfoVec.empty())
+    {
       return false;
+    }
 
     // get loop info(time stamp)
     double loopTimeCur = loopInfoVec.front().data[0];
@@ -1740,11 +1824,16 @@ public:
 
     // too close in time
     if (abs(loopTimeCur - loopTimePre) < historyKeyframeSearchTimeDiff)
+    {
       return false;
+    }
 
     int cloudSize = copy_cloudKeyPoses6D->size();
+    // if num of key frame is too small
     if (cloudSize < 2)
-      return false; // num of key frame is too small
+    {
+      return false;
+    }
 
     // latest key
     loopKeyCur = cloudSize - 1;
@@ -1753,7 +1842,7 @@ public:
     {
       if (copy_cloudKeyPoses6D->points[i].time >= loopTimeCur)
       {
-        loopKeyCur = round(copy_cloudKeyPoses6D->points[i].intensity); // round???
+        loopKeyCur = round(copy_cloudKeyPoses6D->points[i].intensity); // intensity的整数部分是序号
       }
       else
       {
@@ -1776,16 +1865,21 @@ public:
       }
     }
 
+    // if same key frame
     if (loopKeyCur == loopKeyPre)
-      return false; // same key frame
+    {
+      return false;
+    }
 
     auto it = loopIndexContainer.find(loopKeyCur); // iterator
     // if (loop key cur has been saved in loop container)
     if (it != loopIndexContainer.end())
+    {
       return false;
+    }
 
     // index of 2 loop key frames
-    *latestID = loopKeyCur;
+    *latestID  = loopKeyCur;
     *closestID = loopKeyPre;
     return true;
   }
@@ -1799,7 +1893,9 @@ public:
     // check loop constraint added before
     auto it = loopIndexContainer.find(loopKeyCur);
     if (it != loopIndexContainer.end())
+    {
       return false;
+    }
 
     // find the closest history key frame
     std::vector<int> pointSearchIndLoop;
@@ -1808,21 +1904,23 @@ public:
     kdtreeHistoryKeyPoses->radiusSearch(copy_cloudKeyPoses3D->back(), historyKeyframeSearchRadius, pointSearchIndLoop, pointSearchSqDisLoop, 0);
 
     for (int i = 0; i < (int)pointSearchIndLoop.size(); ++i)
-    { // check time difference
+    {
       int id = pointSearchIndLoop[i];
-      //  两帧时间差也满足最小要求
+      //  check time difference: 两帧时间差也满足最小要求
       if (abs(copy_cloudKeyPoses6D->points[id].time - timeLaserInfoCur) > historyKeyframeSearchTimeDiff)
       {
         loopKeyPre = id;
         break;
       }
-    } // if stop too long, also generate loop. we can use pose difference to check it
+    } // if stop too long, loop will be generated, too. we can use pose difference to check it
 
     // no loop
     if (loopKeyPre == -1 || loopKeyCur == loopKeyPre)
+    {
       return false;
+    }
 
-    *latestID = loopKeyCur;
+    *latestID  = loopKeyCur;
     *closestID = loopKeyPre;
     return true;
   }
@@ -1837,14 +1935,18 @@ public:
     {
       int keyNear = key + i; // index of near frame
       if (keyNear < 0 || keyNear >= cloudSize)
+      {
         continue;
+      }
       // convert to global coordinate
       *nearKeyframes += *transformPointCloud(cornerCloudKeyFrames[keyNear], &copy_cloudKeyPoses6D->points[keyNear]);
       *nearKeyframes += *transformPointCloud(surfCloudKeyFrames[keyNear], &copy_cloudKeyPoses6D->points[keyNear]);
     }
-    // no valid cloud/frame
+    // if no valid cloud/frame
     if (nearKeyframes->empty())
+    {
       return;
+    }
 
     // downsample near keyframes
     pcl::PointCloud<PointType>::Ptr cloud_temp(new pcl::PointCloud<PointType>());
@@ -1856,40 +1958,42 @@ public:
   void visualizeLoopClosure()
   {
     if (loopIndexContainer.empty())
+    {
       return;
+    }
 
-    visualization_msgs::MarkerArray markerArray; //???
+    visualization_msgs::MarkerArray markerArray;
     // loop nodes(add two frames in loop as node)
     // define info in node
-    visualization_msgs::Marker markerNode; //???
-    markerNode.header.frame_id = odometryFrame;
-    markerNode.header.stamp = timeLaserInfoStamp;
-    markerNode.action = visualization_msgs::Marker::ADD;
-    markerNode.type = visualization_msgs::Marker::SPHERE_LIST;
-    markerNode.ns = "loop_nodes";
-    markerNode.id = 0;
+    visualization_msgs::Marker markerNode;
+    markerNode.header.frame_id    = odometryFrame;
+    markerNode.header.stamp       = timeLaserInfoStamp;
+    markerNode.action             = visualization_msgs::Marker::ADD;
+    markerNode.type               = visualization_msgs::Marker::SPHERE_LIST;
+    markerNode.ns                 = "loop_nodes";
+    markerNode.id                 = 0;
     markerNode.pose.orientation.w = 1;
-    markerNode.scale.x = 0.3;
-    markerNode.scale.y = 0.3;
-    markerNode.scale.z = 0.3;
-    markerNode.color.r = 0;
-    markerNode.color.g = 0.8;
-    markerNode.color.b = 1;
-    markerNode.color.a = 1;
+    markerNode.scale.x            = 0.3;
+    markerNode.scale.y            = 0.3;
+    markerNode.scale.z            = 0.3;
+    markerNode.color.r            = 0;
+    markerNode.color.g            = 0.8;
+    markerNode.color.b            = 1;
+    markerNode.color.a            = 1;
     // loop edges(add constraint between two frames)
     visualization_msgs::Marker markerEdge;
-    markerEdge.header.frame_id = odometryFrame;
-    markerEdge.header.stamp = timeLaserInfoStamp;
-    markerEdge.action = visualization_msgs::Marker::ADD;
-    markerEdge.type = visualization_msgs::Marker::LINE_LIST;
-    markerEdge.ns = "loop_edges";
-    markerEdge.id = 1;
+    markerEdge.header.frame_id    = odometryFrame;
+    markerEdge.header.stamp       = timeLaserInfoStamp;
+    markerEdge.action             = visualization_msgs::Marker::ADD;
+    markerEdge.type               = visualization_msgs::Marker::LINE_LIST;
+    markerEdge.ns                 = "loop_edges";
+    markerEdge.id                 = 1;
     markerEdge.pose.orientation.w = 1;
-    markerEdge.scale.x = 0.1;
-    markerEdge.color.r = 0.9;
-    markerEdge.color.g = 0.9;
-    markerEdge.color.b = 0;
-    markerEdge.color.a = 1;
+    markerEdge.scale.x            = 0.1;
+    markerEdge.color.r            = 0.9;
+    markerEdge.color.g            = 0.9;
+    markerEdge.color.b            = 0;
+    markerEdge.color.a            = 1;
 
     // traverse all loop
     for (auto it = loopIndexContainer.begin(); it != loopIndexContainer.end(); ++it)
@@ -1901,7 +2005,7 @@ public:
       p.y = copy_cloudKeyPoses6D->points[key_cur].y;
       p.z = copy_cloudKeyPoses6D->points[key_cur].z;
       // add node and edge
-      markerNode.points.push_back(p); //???
+      markerNode.points.push_back(p);
       markerEdge.points.push_back(p);
       p.x = copy_cloudKeyPoses6D->points[key_pre].x;
       p.y = copy_cloudKeyPoses6D->points[key_pre].y;
@@ -1919,7 +2023,7 @@ public:
   // global visualize thread
   void visualizeGlobalMapThread()
   {
-    ros::Rate rate(0.2); // // 按一定的频率发布全局地图
+    ros::Rate rate(0.2); // 按一定的频率发布全局地图
     while (ros::ok())
     {
       rate.sleep();
@@ -1928,13 +2032,17 @@ public:
 
     // when ros is killed, save map；savePCD 再params.yaml文件中，选择是否保存地图
     if (savePCD == false)
+    {
       return;
+    }
 
     lio_sam::save_mapRequest req;
     lio_sam::save_mapResponse res;
 
     if (!saveMapService(req, res))
+    {
       cout << "Fail to save map" << endl;
+    }
   }
 
   // publish global map
@@ -1942,10 +2050,14 @@ public:
   {
     // no subscriber, do not publish
     if (pubLaserCloudSurround.getNumSubscribers() == 0)
+    {
       return;
+    }
     // if no key frame, no map; cloudKeyPoses3D 存的是关键帧的位姿
     if (cloudKeyPoses3D->points.empty() == true)
+    {
       return;
+    }
 
     pcl::KdTreeFLANN<PointType>::Ptr kdtreeGlobalMap(new pcl::KdTreeFLANN<PointType>());
     pcl::PointCloud<PointType>::Ptr globalMapKeyPoses(new pcl::PointCloud<PointType>()); //???

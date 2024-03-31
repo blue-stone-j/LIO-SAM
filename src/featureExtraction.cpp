@@ -23,7 +23,7 @@ struct by_value
 
 class FeatureExtraction : public ParamServer
 {
-public:
+ public:
   ros::Subscriber subLaserCloudInfo;
 
   ros::Publisher pubLaserCloudInfo;
@@ -52,15 +52,15 @@ public:
 
     // 发布2种特征, surface和corner
     pubLaserCloudInfo = nh.advertise<lio_sam::cloud_info>("lio_sam/feature/cloud_info", 1);
-    pubCornerPoints = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_corner", 1);
-    pubSurfacePoints = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_surface", 1);
+    pubCornerPoints   = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_corner", 1);
+    pubSurfacePoints  = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_surface", 1);
 
     initializationValue();
   }
 
   void laserCloudInfoHandler(const lio_sam::cloud_infoConstPtr &msgIn)
   {
-    cloudInfo = *msgIn;                                      // new cloud info
+    cloudInfo   = *msgIn;                                    // new cloud info
     cloudHeader = msgIn->header;                             // new cloud header
     pcl::fromROSMsg(msgIn->cloud_deskewed, *extractedCloud); // new cloud for extraction
 
@@ -83,31 +83,23 @@ public:
     // 计算曲率, 前后五个点深度差的平方和, 存到cloudCurvature中
     // 前五个点的距离属性之和加后五个点的距离之和-10倍该点的距离,算出差值，确定连续点之间的起伏趋势
     for (int i = 5; i < cloudSize - 5; i++)
-    { // calcute smoothnese
-      float diffRange = cloudInfo.pointRange[i - 5] +
-                        cloudInfo.pointRange[i - 4] +
-                        cloudInfo.pointRange[i - 3] +
-                        cloudInfo.pointRange[i - 2] +
-                        cloudInfo.pointRange[i - 1] -  // here is minus
-                        cloudInfo.pointRange[i] * 10 + // here is 10
-                        cloudInfo.pointRange[i + 1] +
-                        cloudInfo.pointRange[i + 2] +
-                        cloudInfo.pointRange[i + 3] +
-                        cloudInfo.pointRange[i + 4] +
-                        cloudInfo.pointRange[i + 5];
+    {                                                                                                                                                                         // calcute smoothnese
+      float diffRange = cloudInfo.pointRange[i - 5] + cloudInfo.pointRange[i - 4] + cloudInfo.pointRange[i - 3] + cloudInfo.pointRange[i - 2] + cloudInfo.pointRange[i - 1] - // here is minus
+                        cloudInfo.pointRange[i] * 10 +                                                                                                                        // here is 10
+                        cloudInfo.pointRange[i + 1] + cloudInfo.pointRange[i + 2] + cloudInfo.pointRange[i + 3] + cloudInfo.pointRange[i + 4] + cloudInfo.pointRange[i + 5];
 
       cloudCurvature[i] = diffRange * diffRange; // diffX * diffX + diffY * diffY + diffZ * diffZ;
 
       cloudNeighborPicked[i] = 0;
-      cloudLabel[i] = 0;
+      cloudLabel[i]          = 0;
       // cloudSmoothness for sorting; 记录曲率以及对应点的索引, 后续需要根据曲率进行排序，打乱点的顺序, 只能通过ind找到点
       cloudSmoothness[i].value = cloudCurvature[i];
-      cloudSmoothness[i].ind = i;
+      cloudSmoothness[i].ind   = i;
     }
   }
 
-  // according to the article, there are several kinds of points ,from which we should't extract features
-  // here we mark occluded points and parallel beam points
+  // According to the article, there are several kinds of points ,from which we should't extract features.
+  // Here we mark occluded points and parallel beam points
   void markOccludedPoints()
   {
     int cloudSize = extractedCloud->points.size();
@@ -120,9 +112,9 @@ public:
       // 深度图中列的差值
       int columnDiff = std::abs(int(cloudInfo.pointColInd[i + 1] - cloudInfo.pointColInd[i]));
 
-      // 平行线和遮挡的判断参考LOAM
+      // 平行线和遮挡的判断参考LOAM;10 pixel diff in range image
       if (columnDiff < 10)
-      { // 10 pixel diff in range image
+      {
         // difference of column is small and difference of range is large
         if (depth1 - depth2 > 0.3)
         {
@@ -131,7 +123,7 @@ public:
           cloudNeighborPicked[i - 3] = 1;
           cloudNeighborPicked[i - 2] = 1;
           cloudNeighborPicked[i - 1] = 1;
-          cloudNeighborPicked[i] = 1;
+          cloudNeighborPicked[i]     = 1;
         }
         else if (depth2 - depth1 > 0.3)
         {
@@ -158,7 +150,6 @@ public:
   // 提取corner和surface特征
   void extractFeatures()
   {
-
     cornerCloud->clear();
     surfaceCloud->clear();
     pcl::PointCloud<PointType>::Ptr surfaceCloudScan(new pcl::PointCloud<PointType>());
@@ -167,20 +158,23 @@ public:
     for (int i = 0; i < N_SCAN; i++)
     {
       surfaceCloudScan->clear();
+      // devide total cloud into 6 segments; 为了保证各方向均匀提取, 将深度图分为6个子图
       for (int j = 0; j < 6; j++)
-      { // devide total cloud into 6 segments; 为了保证各方向均匀提取, 将深度图分为6个子图,
+      {
         // start and end point's index
         int sp = (cloudInfo.startRingIndex[i] * (6 - j) + cloudInfo.endRingIndex[i] * j) / 6;
         int ep = (cloudInfo.startRingIndex[i] * (5 - j) + cloudInfo.endRingIndex[i] * (j + 1)) / 6 - 1;
 
         if (sp >= ep)
+        {
           continue;
+        }
 
         // 每个子图中对点的曲率进行排序，sp和ep分别是这段点云的起始点与终止点
         std::sort(cloudSmoothness.begin() + sp, cloudSmoothness.begin() + ep, by_value());
 
         int largestPickedNum = 0;
-        // 标记平面点: find sharp/edge in one single segment
+        // 标记边缘点: find sharp/edge in one single segment
         for (int k = ep; k >= sp; k--)
         {
           int ind = cloudSmoothness[k].ind;
@@ -203,19 +197,24 @@ public:
             for (int l = 1; l <= 5; l++)
             {
               int columnDiff = std::abs(int(cloudInfo.pointColInd[ind + l] - cloudInfo.pointColInd[ind + l - 1]));
+              // means not neighbor area
               if (columnDiff > 10)
-                break; // means not neighbor area
+              {
+                break;
+              }
               cloudNeighborPicked[ind + l] = 1;
             }
             for (int l = -1; l >= -5; l--)
             {
               int columnDiff = std::abs(int(cloudInfo.pointColInd[ind + l] - cloudInfo.pointColInd[ind + l + 1]));
               if (columnDiff > 10)
+              {
                 break;
+              }
               cloudNeighborPicked[ind + l] = 1;
             }
           }
-        }
+        } // endfor: 标记边缘点
 
         // 标记平面点
         for (int k = sp; k <= ep; k++)
@@ -224,7 +223,7 @@ public:
           // 在还没有标记并且曲率较小的点里面选
           if (cloudNeighborPicked[ind] == 0 && cloudCurvature[ind] < surfThreshold)
           {
-            cloudLabel[ind] = -1; // surf feature
+            cloudLabel[ind]          = -1; // surf feature
             cloudNeighborPicked[ind] = 1;
 
             // 防止平面点聚集
@@ -232,18 +231,22 @@ public:
             {
               int columnDiff = std::abs(int(cloudInfo.pointColInd[ind + l] - cloudInfo.pointColInd[ind + l - 1]));
               if (columnDiff > 10)
+              {
                 break;
+              }
               cloudNeighborPicked[ind + l] = 1;
             }
             for (int l = -1; l >= -5; l--)
             {
               int columnDiff = std::abs(int(cloudInfo.pointColInd[ind + l] - cloudInfo.pointColInd[ind + l + 1]));
               if (columnDiff > 10)
+              {
                 break;
+              }
               cloudNeighborPicked[ind + l] = 1;
             }
           }
-        }
+        } // endfor: 标记平面点
 
         // label 小于 0 的点是平面点
         for (int k = sp; k <= ep; k++)
@@ -254,7 +257,7 @@ public:
             surfaceCloudScan->push_back(extractedCloud->points[k]);
           }
         }
-      }
+      } // endfor: have traversed 6 sub image
 
       // 下采样每行的面点
       surfaceCloudScanDS->clear();
@@ -263,7 +266,7 @@ public:
 
       // 保存下采样后的面点
       *surfaceCloud += *surfaceCloudScanDS;
-    }
+    } // endfor: have extracted all features from every scan
   }
 
   void publishFeatureCloud()
@@ -271,7 +274,7 @@ public:
     // free cloud info memory
     freeCloudInfoMemory();
     // save newly extracted features
-    cloudInfo.cloud_corner = publishCloud(&pubCornerPoints, cornerCloud, cloudHeader.stamp, lidarFrame);
+    cloudInfo.cloud_corner  = publishCloud(&pubCornerPoints, cornerCloud, cloudHeader.stamp, lidarFrame);
     cloudInfo.cloud_surface = publishCloud(&pubSurfacePoints, surfaceCloud, cloudHeader.stamp, lidarFrame);
     // publish to mapOptimization
     pubLaserCloudInfo.publish(cloudInfo);
@@ -295,9 +298,9 @@ public:
     cornerCloud.reset(new pcl::PointCloud<PointType>());
     surfaceCloud.reset(new pcl::PointCloud<PointType>());
 
-    cloudCurvature = new float[N_SCAN * Horizon_SCAN];
+    cloudCurvature      = new float[N_SCAN * Horizon_SCAN];
     cloudNeighborPicked = new int[N_SCAN * Horizon_SCAN];
-    cloudLabel = new int[N_SCAN * Horizon_SCAN];
+    cloudLabel          = new int[N_SCAN * Horizon_SCAN];
   }
 };
 
