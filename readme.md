@@ -8,6 +8,7 @@
 ### helpful links
 * LIOSAM代码简介：https://zhuanlan.zhihu.com/p/352039509
 * LIO-SAM论文阅读: https://zhuanlan.zhihu.com/p/153394930
+* [论文](https://github.com/blue-stone-j/papers/blob/main/2020%20LIO%20SAM%20-%20Tightly%20coupled%20Lidar%20Inertial%20Odometry%20via%20Smoothing%20and%20Mapping.pdf)
 
 
 ### 可能遇到的问题
