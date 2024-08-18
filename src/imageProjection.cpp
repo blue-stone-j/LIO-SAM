@@ -15,28 +15,35 @@ struct VelodynePointXYZIRT
 {
   PCL_ADD_POINT4D
   PCL_ADD_INTENSITY;
-  uint16_t ring; // 距离矩阵中的每一行为一个ring
+  std::uint16_t ring; // 距离矩阵中的每一行为一个ring
   float time;
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW // 确保定义新类型点云内存与SSE对齐
 } EIGEN_ALIGN16;                  // 强制SSE填充以正确对齐内存
 // 注册点云： User defined point structures can be registered using PCL macros.
 // 定义新类型里元素包括XYZI+ring+time, time is for undistort,ring is for projecting cloud to range image
+// clang-format off
 POINT_CLOUD_REGISTER_POINT_STRUCT(VelodynePointXYZIRT,
-                                  (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(uint16_t, ring, ring)(float, time, time))
+                                  (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)
+                                  (std::uint16_t, ring, ring)(float, time, time))
+// clang-format on
 
 struct OusterPointXYZIRT
 {
   PCL_ADD_POINT4D;
   float intensity;
-  uint32_t t;
-  uint16_t reflectivity;
-  uint8_t ring;
-  uint16_t noise;
-  uint32_t range;
+  std::uint32_t t;
+  std::uint16_t reflectivity;
+  std::uint8_t ring;
+  std::uint16_t noise;
+  std::uint32_t range;
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
+// clang-format off
 POINT_CLOUD_REGISTER_POINT_STRUCT(OusterPointXYZIRT,
-                                  (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(uint32_t, t, t)(uint16_t, reflectivity, reflectivity)(uint8_t, ring, ring)(uint16_t, noise, noise)(uint32_t, range, range))
+                                  (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)
+                                  (std::uint32_t, t, t)(std::uint16_t, reflectivity, reflectivity)
+                                  (std::uint8_t, ring, ring)(std::uint16_t, noise, noise)(std::uint32_t, range, range))
+// clang-format on
 
 // Use the Velodyne point format as a common representation
 using PointXYZIRT = VelodynePointXYZIRT;

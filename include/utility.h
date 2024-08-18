@@ -20,7 +20,8 @@ date       :
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
-#include <opencv/cv.h>
+// #include <opencv/imgproc.hpp> // for old version
+#include <opencv2/imgproc.hpp> // compatible with ros-noetic
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -73,7 +74,7 @@ enum class SensorType
  */
 class ParamServer
 {
-public:
+ public:
   ros::NodeHandle nh;
   std::string robot_id;
 
@@ -129,31 +130,31 @@ public:
   int surfFeatureMinValidNum;
 
   // voxel filter paprams
-  float odometrySurfLeafSize; // ???
-  float mappingCornerLeafSize;
+  float odometrySurfLeafSize;  // 特征提取后，下采样面点
+  float mappingCornerLeafSize; // 下采样地图点
   float mappingSurfLeafSize;
 
-  float z_tollerance; // z,pitch and yaw shouldn't be larger than this value for 2D situation;
-  float rotation_tollerance;
+  float z_tollerance;        // z,pitch and yaw shouldn't be larger than this value for 2D situation;
+  float rotation_tollerance; // 相邻两帧位姿的角度的变化阈值
 
   // CPU Params
-  int numberOfCores;             // for concurrency
+  int numberOfCores;             // 最多可使用的cpu核心数量, for concurrency
   double mappingProcessInterval; // min interval between process of two consecutive clouds
 
   // Surrounding map: extract map from cached clouds by pose of clouds.
-  float surroundingkeyframeAddingDistThreshold; // threshold to judge whether this cloud should be a key frame
-  float surroundingkeyframeAddingAngleThreshold;
-  float surroundingKeyframeDensity;      // pose of selected cloud won't be near to each other
-  float surroundingKeyframeSearchRadius; // select clouds whose pose is in this area
+  float surroundingkeyframeAddingDistThreshold;  // threshold to judge whether this cloud should be a key frame
+  float surroundingkeyframeAddingAngleThreshold; // 角度阈值
+  float surroundingKeyframeDensity;              // pose of selected cloud won't be near to each other
+  float surroundingKeyframeSearchRadius;         // select clouds whose pose is in this area
 
   // Loop closure
-  bool loopClosureEnableFlag;
-  float loopClosureFrequency; // fraquency to detect loop
-  int surroundingKeyframeSize;
-  float historyKeyframeSearchRadius;
+  bool loopClosureEnableFlag;          // 是否使用回环
+  float loopClosureFrequency;          // fraquency to detect loop
+  int surroundingKeyframeSize;         // 构建回环时使用的关键帧点云的最大数量
+  float historyKeyframeSearchRadius;   // 在这个范围内寻找用于回环的关键帧
   float historyKeyframeSearchTimeDiff; // clouds that is close in time should be considered as loop
-  int historyKeyframeSearchNum;
-  float historyKeyframeFitnessScore; // degree to be a loop
+  int historyKeyframeSearchNum;        // 从回环帧前后这个数量的点云合并作为回环点云
+  float historyKeyframeFitnessScore;   // score to be a loop by icp
 
   // global map visualization radius
   float globalMapVisualizationSearchRadius;
@@ -216,10 +217,10 @@ public:
     nh.param<vector<double>>("lio_sam/extrinsicRPY", extRPYV, vector<double>());
     nh.param<vector<double>>("lio_sam/extrinsicTrans", extTransV, vector<double>());
     // http://blue-stone-w.top/blog/Eigen%E5%AD%A6%E4%B9%A0/, explaination for .data()
-    extRot = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRotV.data(), 3, 3);
-    extRPY = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRPYV.data(), 3, 3);
+    extRot   = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRotV.data(), 3, 3);
+    extRPY   = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRPYV.data(), 3, 3);
     extTrans = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extTransV.data(), 3, 1);
-    extQRPY = Eigen::Quaterniond(extRPY);
+    extQRPY  = Eigen::Quaterniond(extRPY);
 
     nh.param<float>("lio_sam/edgeThreshold", edgeThreshold, 0.1);
     nh.param<float>("lio_sam/surfThreshold", surfThreshold, 0.1);
@@ -265,29 +266,26 @@ public:
     // rotate IMU data to front-left-up frame
     // rotate acceleration 加速度转到雷达系
     Eigen::Vector3d acc(imu_in.linear_acceleration.x, imu_in.linear_acceleration.y, imu_in.linear_acceleration.z);
-    acc = extRot * acc; // use extrinsics (lidar -> IMU) ext是lidar到imu的外参中的R矩阵
+    acc                           = extRot * acc; // use extrinsics (lidar -> IMU) ext是lidar到imu的外参中的R矩阵
     imu_out.linear_acceleration.x = acc.x();
     imu_out.linear_acceleration.y = acc.y();
     imu_out.linear_acceleration.z = acc.z();
     // rotate gyroscope 角速度转到雷达系
     Eigen::Vector3d gyr(imu_in.angular_velocity.x, imu_in.angular_velocity.y, imu_in.angular_velocity.z);
-    gyr = extRot * gyr;
+    gyr                        = extRot * gyr;
     imu_out.angular_velocity.x = gyr.x();
     imu_out.angular_velocity.y = gyr.y();
     imu_out.angular_velocity.z = gyr.z();
     // rotate roll pitch yaw; using 9-axis IMU, there are pose data
     Eigen::Quaterniond q_from(imu_in.orientation.w, imu_in.orientation.x, imu_in.orientation.y, imu_in.orientation.z);
     Eigen::Quaterniond q_final = q_from * extQRPY;
-    imu_out.orientation.x = q_final.x(); // transform eigen data to ros data
-    imu_out.orientation.y = q_final.y();
-    imu_out.orientation.z = q_final.z();
-    imu_out.orientation.w = q_final.w();
+    imu_out.orientation.x      = q_final.x(); // transform eigen data to ros data
+    imu_out.orientation.y      = q_final.y();
+    imu_out.orientation.z      = q_final.z();
+    imu_out.orientation.w      = q_final.w();
 
     // check: if use 6-axis IMU, there is no RPY data
-    if (sqrt(q_final.x() * q_final.x() +
-             q_final.y() * q_final.y() +
-             q_final.z() * q_final.z() +
-             q_final.w() * q_final.w()) < 0.1)
+    if (sqrt(q_final.x() * q_final.x() + q_final.y() * q_final.y() + q_final.z() * q_final.z() + q_final.w() * q_final.w()) < 0.1)
     {
       ROS_ERROR("Invalid quaternion, please use a 9-axis IMU!");
       ros::shutdown();
@@ -305,7 +303,7 @@ sensor_msgs::PointCloud2 publishCloud(ros::Publisher *thisPub,
 {
   sensor_msgs::PointCloud2 tempCloud;
   pcl::toROSMsg(*thisCloud, tempCloud);
-  tempCloud.header.stamp = thisStamp;
+  tempCloud.header.stamp    = thisStamp;
   tempCloud.header.frame_id = thisFrame;
   if (thisPub->getNumSubscribers() != 0)
   {
@@ -344,9 +342,9 @@ void imuRPY2rosRPY(sensor_msgs::Imu *thisImuMsg, T *rosRoll, T *rosPitch, T *ros
   tf::quaternionMsgToTF(thisImuMsg->orientation, orientation);
   tf::Matrix3x3(orientation).getRPY(imuRoll, imuPitch, imuYaw);
 
-  *rosRoll = imuRoll;
+  *rosRoll  = imuRoll;
   *rosPitch = imuPitch;
-  *rosYaw = imuYaw;
+  *rosYaw   = imuYaw;
 }
 
 float pointDistance(PointType p)

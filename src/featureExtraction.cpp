@@ -170,7 +170,7 @@ class FeatureExtraction : public ParamServer
           continue;
         }
 
-        // 每个子图中对点的曲率进行排序，sp和ep分别是这段点云的起始点与终止点
+        // 每个子图中对点的曲率进行排序，sp和ep分别是这段点云的起始点与终止点, ascending
         std::sort(cloudSmoothness.begin() + sp, cloudSmoothness.begin() + ep, by_value());
 
         int largestPickedNum = 0;
